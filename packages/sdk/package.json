@@ -1,0 +1,47 @@
+{
+  "name": "@c3exchange/sdk",
+  "version": "0.4.0-alpha.1",
+  "description": "",
+  "main": "build/src/index.js",
+  "module": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "browser": "dist/c3exchange-sdk.min.js",
+  "scripts": {
+    "clean": "rimraf build && rimraf dist && rimraf .buildinfo",
+    "build": "npm run clean && tsc --build && webpack",
+    "build:deploy": "npm run clean && tsc --build tsconfig.build.json && webpack",
+    "prepack": "npm run build:deploy",
+    "test": "mocha -r ts-node/register ./test/**/*.test.ts ./test/**/*.spec.ts",
+    "test-script": "mocha -r ts-node/register",
+    "lint": "eslint src/**/*.ts test/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts test/**/*.ts --fix"
+  },
+  "keywords": [
+    "c3"
+  ],
+  "author": "c3.io",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@c3exchange/common": "^0.4.0-alpha.1",
+    "axios": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.4",
+    "@types/mocha": "^10.0.1",
+    "buffer": "^6.0.3",
+    "chai": "^4.3.7",
+    "cross-env": "^7.0.3",
+    "crypto-browserify": "^3.12.0",
+    "https-browserify": "^1.0.0",
+    "mocha": "^10.2.0",
+    "nock": "^13.3.0",
+    "process": "^0.11.10",
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "ts-loader": "^9.4.2",
+    "url": "^0.11.1",
+    "webpack": "^5.76.0",
+    "webpack-bundle-analyzer": "^4.9.0",
+    "webpack-cli": "^5.0.1"
+  }
+}

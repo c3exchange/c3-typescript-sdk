@@ -1,0 +1,19 @@
+{
+  "extends": "../../base-tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "build",
+    "composite": true,
+    "tsBuildInfoFile": ".buildinfo/cjs/tsconfig.tsbuildinfo"
+  },
+  "exclude": [
+    "build",
+    ".buildinfo"
+  ],
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

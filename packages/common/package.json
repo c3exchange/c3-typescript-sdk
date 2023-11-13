@@ -1,0 +1,32 @@
+{
+  "name": "@c3exchange/common",
+  "version": "0.4.0-alpha.1",
+  "description": "",
+  "main": "./build/src/index.js",
+  "module": "./build/src/index.js",
+  "types": "./build/src/index.d.ts",
+  "scripts": {
+    "clean": "rimraf build && rimraf .buildinfo/cjs",
+    "build": "npm run clean && tsc --build",
+    "build:deploy": "npm run clean && tsc --build tsconfig.build.json",
+    "prepack": "npm run build:deploy",
+    "test": "mocha -r ts-node/register test/**/*.test.ts",
+    "test-script": "mocha -r ts-node/register",
+    "lint": "eslint src/**/*.ts test/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts test/**/*.ts --fix"
+  },
+  "author": "c3.io",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@certusone/wormhole-sdk": "^0.9.23",
+    "assert": "^2.0.0",
+    "js-sha512": "^0.8.0",
+    "zod": "^3.22.3"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.4",
+    "@types/mocha": "^10.0.1",
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0"
+  }
+}
