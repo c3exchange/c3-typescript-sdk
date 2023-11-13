@@ -1,0 +1,9 @@
+test/*
+src/*
+tsconfig.json
+tsconfig.build.json
+tsconfig.browser.json
+*.tgz
+.buildinfo
+webpack.config.js
+dummyfile.js
