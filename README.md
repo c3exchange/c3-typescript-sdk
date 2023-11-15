@@ -14,7 +14,7 @@ Scripts with examples are provided to help you understand how to use the SDK to 
 
 ## API Documentation
 
-For detailed information about the API and its capabilities, please refer to the official [Crypto Exchange API Documentation](https://docs.c3.io/).
+For detailed information about the API and its capabilities, please refer to the official [C3 Exchange API Documentation](https://docs.c3.io/).
 
 ## Dependencies
 NOTE: if signing using an EVM Wallet, ethers.js version 5 is supported 
@@ -69,7 +69,7 @@ async function createOrders(): Promise<void> {
     price: ORDER_PRICE,
     // maxBorrow: "2.5", // Optional, used for margin orders
     // maxRepay:"2.5", // Optional, used to pay back loans
-    // expiresOn?: UnixTimestampInSeconds;
+    // expiresOn: // Optional, UnixTimestampInSeconds;
   };
 
   const orderResult = await accountSdk.createOrder(firsOrder);

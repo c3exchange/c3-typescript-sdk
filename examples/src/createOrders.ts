@@ -37,7 +37,7 @@ async function createOrders(): Promise<void> {
     price: ORDER_PRICE,
     // maxBorrow: "2.5", // Optional, used for margin orders
     // maxRepay:"2.5", // Optional, used to pay back loans
-    // expiresOn?: UnixTimestampInSeconds;
+    // expiresOn: // Optional, UnixTimestampInSeconds;
   };
 
   const orderResult = await accountSdk.createOrder(firsOrder);
