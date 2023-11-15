@@ -1,13 +1,14 @@
 import { Signer } from "@c3exchange/common";
 import { C3SDK, OrderParams } from "@c3exchange/sdk";
 
-const Algorand_MNEMONIC = "mnemonic here";
+const Algorand_MNEMONIC = "mnemonic here"
 
-const MARKET = "ALGO-WUSDC";
+
+const MARKET = "  BTC-USDC";
 const ORDER_TYPE = "limit";
 const ORDER_SIDE = "sell";
-const ORDER_PRICE = "20.5";
-const ORDER_AMOUNT = "0.5";
+const ORDER_PRICE = "45000.01";
+const ORDER_AMOUNT = "0.1";
 
 const c3sdk = new C3SDK({
   c3_api: {
