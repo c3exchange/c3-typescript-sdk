@@ -24,7 +24,7 @@ async function listOrders(): Promise<void> {
 
   const openOrders = await accountSdk.getOrders(undefined, { isOpen: true });
 
-  const ethOpenOrders = await accountSdk.getOrders("ETH-WUSDC", {
+  const ethOpenOrders = await accountSdk.getOrders("ETH-USDC", {
     isOpen: true,
   });
 }
