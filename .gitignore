@@ -134,7 +134,7 @@ dist
 *.~*
 node_modules/
 packages/*/dist/
-packages/*/build/
+**/build/
 packages/*/out/
 .buildinfo/
 coverage/
@@ -168,3 +168,5 @@ venv/
 # Local sandbox configuration
 sandbox_config.json
 
+# notes
+_scratch/
