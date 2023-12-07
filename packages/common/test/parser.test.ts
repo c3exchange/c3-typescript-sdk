@@ -136,6 +136,7 @@ describe("Parser tests", () => {
             expect(() => parseChainId(BigInt(5)), chainIds + " with BIGnumber").to.throw()
             expect(parseChainId(undefined, chainId), chainIds + " with undefined").to.be.equal(chainId)
             expect(() => parseChainId("TEST"), chainIds + " with invalid string").to.throw()
+            expect(parseChainId(undefined, undefined, true), "with undefined and optional").to.be.undefined
         }
     })
     it("Should parse operation status schema", () => {

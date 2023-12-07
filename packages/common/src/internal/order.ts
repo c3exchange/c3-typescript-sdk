@@ -1,9 +1,8 @@
-import { getPublicKeyByAddress } from '../chains'
-import { Base64, InstrumentSlotId, OrderId, Signature, UnixTimestampInMiliseconds, UserAddress, OrderNonce, MarketId, AccountId } from '../interfaces'
+import { Base64, InstrumentSlotId, OrderId, Signature, UnixTimestampInMiliseconds, UserAddress, OrderNonce, MarketId } from '../interfaces'
 import { ContractAmount, MessageSignCallback, MessageSigner } from '../tools'
 import { encodeBase64, sha256Hash, IPackedInfo, packABIString, encodeABIValue, concatArrays, decodeBase64 } from '../utils'
 import { getDataToSign } from './signerUtils'
-
+import { MarketFee } from "../tools"
 export interface CancelRequest{
     creator: UserAddress,
     user: UserAddress,
@@ -38,6 +37,11 @@ export interface SignedOrderData {
     id: OrderId // FIXME: This id should not be here but moving it outside SignedOrderData requires a lot of changes.
 }
 
+export type OrderFees = {
+    maker: MarketFee
+    taker: MarketFee
+    priceImprovement: MarketFee
+}
 
 export function getOrderId(encodedData: Uint8Array): string {
     return encodeBase64(sha256Hash(encodedData))

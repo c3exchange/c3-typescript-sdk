@@ -6,10 +6,12 @@ import type {
     Base64,
     ChainName,
     EVMSigner,
+    Instrument,
     InstrumentAmount,
     InstrumentSlotId,
     SystemInfoResponse,
     UserAddress,
+    WormholeDictionary,
     WormholeService,
     XAssetId,
     XContractAddress
@@ -79,30 +81,31 @@ async function prepareWormholeDeposit (
     // Load and validate instrument chain
     const funderChainId = toChainId(originChain)
     const instrumentChain = instrument.chains.find((c) => c.chainId === funderChainId)
-    if (!instrumentChain) {
-        throw new Error(`instrument chain with chainId: ${funderChainId} not found`)
-    }
+    const wormholeDictionary = wormholeService.getDictionary()
 
-    // Validate token address
-    const tokenAddress = instrumentChain.tokenAddress
-    if (!tokenAddress) {
-        throw new Error("Token address cannot be undefined or null")
+    const {
+        isCCTP,
+        bridgeAddress,
+        tokenInfo: { tokenAddress }
+    } = getWormholeDepositInfo(amount.instrument, wormholeDictionary, originChain)
+
+    if (!instrumentChain && !isCCTP) {
+        throw new Error(`instrument chain with chainId: ${funderChainId} not found`)
     }
 
     // Generate xasset
     const xAsset: XAssetId = {
         chain: originChain,
-        tokenAddress: instrumentChain.tokenAddress
+        tokenAddress: tokenAddress
     }
 
     // Check if the token is eth native
-    const wormholeDictionary = wormholeService.getDictionary()
     const isEthNative = wormholeDictionary.isWrappedCurrency({
-        tokenAddress: instrumentChain.tokenAddress,
+        tokenAddress: tokenAddress,
         chain: originChain
     })
 
-    if (!isEthNative) {
+    if (!isEthNative && !isCCTP) {
         // If it's not eth native, get the appropriate mirror asset from wormhole for this chain and check it matches the token address
         const algorandXAsset: XAssetId = { chain: "algorand", tokenAddress: amount.instrument.asaId.toString() }
         const mirrorAsset = await wormholeService.getMirrorAsset(algorandXAsset, xAsset.chain, funder.getSigner())
@@ -112,17 +115,15 @@ async function prepareWormholeDeposit (
     }
 
     const overrides: ethers.Overrides = {
-        gasLimit: 300000,
+        gasLimit: 200000,
     }
     const decimalValue = amount.toDecimal()
 
     let baseAmountParsed
     if (!isEthNative) {
-        // Check if the wormhole core contract has enough allowance to spend the amount
-        const erc20Contract = new ERC20(xAsset.tokenAddress, funder.getSigner())
+        const erc20Contract = new ERC20(tokenAddress, funder.getSigner())
         const decimals = await erc20Contract.getTokenAddressDecimal()
         baseAmountParsed = parseUnits(decimalValue, decimals)
-        const bridgeAddress = wormholeDictionary.getTokenBridgeContractAddress(originChain).tokenAddress
         const allowance = await erc20Contract.getAllowedAmountToSpend(bridgeAddress)
         if (allowance.lt(baseAmountParsed)) {
             await erc20Contract.approveAmountToSpend(bridgeAddress, baseAmountParsed)
@@ -136,15 +137,30 @@ async function prepareWormholeDeposit (
         chain: 'algorand',
         tokenAddress: systemInfo.contractIds.ceOnchain.toString()
     }
-    const txReceip = await wormholeService.createWormholeTxForEvmNetworkDeposit(
-        xAddress,
-        xAsset,
-        baseAmountParsed,
-        repayAmount.toContract(),
-        funder.getSigner(),
-        userAddress,
-        overrides,
-    )
+
+    let txReceip: ethers.ContractReceipt
+    if (isCCTP) {
+        txReceip = await wormholeService.createWormholeTxForEvmNetworkDeposit_CCTP(
+            xAddress,
+            xAsset,
+            baseAmountParsed,
+            repayAmount.toContract(),
+            funder.getSigner(),
+            userAddress,
+            systemInfo.cctpHubAddress,
+            overrides,
+        )
+    } else {
+        txReceip = await wormholeService.createWormholeTxForEvmNetworkDeposit(
+            xAddress,
+            xAsset,
+            baseAmountParsed,
+            repayAmount.toContract(),
+            funder.getSigner(),
+            userAddress,
+            overrides,
+        )
+    }
 
     let vaaSequence: string | undefined = undefined
     let vaaSignature: Uint8Array | undefined
@@ -162,6 +178,10 @@ async function prepareWormholeDeposit (
 
     const waitForWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
         vaaSequence = await getVAASequence()
+        if (isCCTP) {
+            console.warn("Ignoring waitForWormholeVAA for CCTP")
+            return new Uint8Array()
+        }
         if (!vaaSignature) {
             vaaSignature = await wormholeService.fetchVaaEthereumSource(toChainName(funderChainId), BigInt(vaaSequence), retryTimeout, maxRetryCount, rpcOptions)
         }
@@ -184,6 +204,11 @@ async function prepareWormholeDeposit (
     }
 
     const redeemAndSubmitWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+        if (isCCTP) {
+            console.warn("Ignoring redeemAndSubmitWormholeVAA for CCTP")
+            return ""
+        }
+
         if (wasRedeemed) {
             throw new Error("VAA was already redeemed")
         }
@@ -191,7 +216,7 @@ async function prepareWormholeDeposit (
             vaaSignature = await waitForWormholeVAA(retryTimeout, maxRetryCount, rpcOptions)
         }
 
-        const { id } = await submitWormholeVAA(receiverAccountId, amount, encodeBase64(vaaSignature), repayAmount, txReceip.transactionHash)
+        const { id } = await submitWormholeVAA(receiverAccountId, amount, encodeBase64(vaaSignature), repayAmount, { note: txReceip.transactionHash })
         wasRedeemed = true
 
         return id
@@ -200,6 +225,32 @@ async function prepareWormholeDeposit (
     return {
         txId: txReceip.transactionHash, amount, instrumentId: instrument.id, getVAASequence,
         isTransferCompleted, isVaaEnqueued, waitForWormholeVAA, redeemAndSubmitWormholeVAA
+    }
+}
+
+const getWormholeDepositInfo = (instrument: Instrument, wormholeDictionary: WormholeDictionary, originChain: ChainName) => {
+    const instrumentChain = instrument.chains[0]
+    const isCCTP = originChain !== toChainName(wormholeDictionary.getCCTPHubChainId()) &&  wormholeDictionary.isCCTPAsset(instrumentChain.chainId, instrumentChain.tokenAddress)
+    let bridgeAddress, tokenAddress
+    if (isCCTP) {
+        bridgeAddress = wormholeDictionary.getWormholeCctpIntegrationContractAddress(originChain).tokenAddress
+        tokenAddress = wormholeDictionary.getUSDCTokenAddress(originChain).tokenAddress
+    } else {
+        bridgeAddress = wormholeDictionary.getTokenBridgeContractAddress(originChain).tokenAddress
+        tokenAddress = instrument.chains.find((c) => c.chainId === toChainId(originChain))?.tokenAddress
+        // Validate token address
+        if (!tokenAddress) {
+            throw new Error("Token address cannot be undefined or null")
+        }
+    }
+
+    return {
+        isCCTP,
+        bridgeAddress,
+        tokenInfo: {
+            originChain,
+            tokenAddress
+        }
     }
 }
 
@@ -219,4 +270,5 @@ export {
     prepareAlgorandDeposit,
     prepareWormholeDeposit,
     asWormholeDepositResult,
+    getWormholeDepositInfo,
 }

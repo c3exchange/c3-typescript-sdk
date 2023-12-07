@@ -9,6 +9,7 @@ interface SystemInfoResponse {
         ceOnchain: AppId
         pricecaster: AppId
     }
+    cctpHubAddress: string
 }
 
 export type {

@@ -117,12 +117,18 @@ function parseGranularityName (value: any, defaultValue?: GranularityResolution)
     return Z.nativeEnum(GranularityResolution).parse(value ?? defaultValue)
 }
 
-function parseChainId (value: any, defaultValue?: ChainId): ChainId {
-    return Z.number().int().positive().refine(isChainId).parse(value ?? defaultValue) as ChainId
+function parseChainId (value: any, defaultValue?: ChainId): ChainId
+function parseChainId (value: any, defaultValue?: ChainId, optional?: boolean): ChainId | undefined
+function parseChainId (value: any, defaultValue?: ChainId, optional?: boolean): ChainId | undefined {
+    const chainIdParser = Z.number().int().positive().refine(isChainId)
+    return (optional ? chainIdParser.optional() : chainIdParser).parse(value ?? defaultValue) as ChainId
 }
 
-function parseChainName (value: any, defaultValue?: ChainName): ChainName {
-    return Z.string().refine(isChainName).parse(value ?? defaultValue) as ChainName
+function parseChainName (value: any, defaultValue?: ChainName): ChainName
+function parseChainName (value: any, defaultValue?: ChainName, optional?: boolean): ChainName | undefined
+function parseChainName (value: any, defaultValue?: ChainName, optional?: boolean): ChainName | undefined {
+    const chainNameParser = Z.string().refine(isChainName)
+    return (optional ? chainNameParser.optional() : chainNameParser).parse(value ?? defaultValue) as ChainName
 }
 
 const parseOperationStatusArraySchema = Z.array(Z.nativeEnum(OperationStatus))
@@ -141,7 +147,7 @@ function parseAccountOperationTypeArray (value: any, optional?: boolean): Accoun
 const parseSignature = parseBase64
 const parseTimestamp = parsePositiveInteger
 const parseContractAmount = parseBigInt
-
+const parseDelegationId = parseString
 
 // Parse request
 const newOrderDataSchema = Z.object({
@@ -201,4 +207,5 @@ export {
     parseOperationStatusArray,
     parseAccountOperationTypeArray,
     parseNewOrdersRequest,
+    parseDelegationId,
 }

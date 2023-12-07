@@ -24,7 +24,6 @@ export class UnixClock implements IClock {
 }
 
 export class UnixClockWithRelativeTimestamp extends UnixClock implements IClockWithRelativeTime {
-
     constructor(private readonly _initTimestamp: UnixTimestamp) {
         super()
     }
@@ -32,26 +31,24 @@ export class UnixClockWithRelativeTimestamp extends UnixClock implements IClockW
     public getRelativeTimestamp(currentTimestamp: UnixTimestampInSeconds = this.nowSeconds()): RelativeTimestamp {
         return currentTimestamp - this._initTimestamp
     }
-
 }
 
 export class FixedClock extends UnixClockWithRelativeTimestamp {
+    constructor(private timestamp: UnixTimestampInSeconds) {
+        super(timestamp)
+    }
 
-  constructor(private timestamp: UnixTimestampInSeconds) {
-    super(timestamp)
-  }
+    public nowMilis(): UnixTimestampInMiliseconds {
+        return this.timestamp * MILISECONDS_IN_SECOND
+    }
 
-  public nowMilis(): UnixTimestampInMiliseconds {
-    return this.timestamp * MILISECONDS_IN_SECOND
-  }
+    public nowSeconds(): UnixTimestampInSeconds {
+        return this.timestamp
+    }
 
-  public nowSeconds(): UnixTimestampInSeconds {
-    return this.timestamp
-  }
-
-  public forwardTime(seconds: number) {
-    this.timestamp += seconds
-  }
+    public forwardTime(seconds: number) {
+        this.timestamp += seconds
+    }
 }
 
 export const createGTDExpiration = (clock: IClock = new UnixClock()): UnixTimestampInSeconds => {

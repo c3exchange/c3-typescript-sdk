@@ -38,11 +38,11 @@ export function createPoolMove(
 
 export function createDelegation(
     delegate: UserAddress,
-    creation: UnixTimestamp,
+    nonce: UnixTimestamp,
     expiration: UnixTimestamp
 ): Uint8Array {
     const format = '(byte,address,uint64,uint64)'
-    return encodeABIValue([OnChainRequestOp.Delegate, getPublicKeyByAddress(delegate), creation, expiration], format)
+    return encodeABIValue([OnChainRequestOp.Delegate, getPublicKeyByAddress(delegate), nonce, expiration], format)
 }
 
 export function assetToSlotIdMap(instruments: AssetId[], map: Map<AssetId, ContractAmount>): Map<InstrumentSlotId, ContractAmount> {

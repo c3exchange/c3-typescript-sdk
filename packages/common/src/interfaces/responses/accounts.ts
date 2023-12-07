@@ -1,4 +1,4 @@
-import type { AccountId, AssetId, Base64, DecimalPicoUsdPrice, InstrumentId, MarketId, OperationId, OrderId, Signature, UnixTimestamp, UserAddress, Quantity, ClientOrderId, TransactionId, PicoUsdResponse } from "../types"
+import type { AccountId, AssetId, Base64, DecimalPicoUsdPrice, InstrumentId, MarketId, OperationId, DelegationId, OrderId, Signature, UnixTimestamp, UserAddress, Quantity, ClientOrderId, TransactionId, PicoUsdResponse } from "../types"
 import type { ChainId, XAddress, XRecipientAddress } from "../../wormhole"
 import { MarketTradeResponse } from "./markets"
 import { SettlementTicket } from "../../internal/index"
@@ -77,7 +77,7 @@ interface  InsolventAccount{
     cash: BaseInstrumentAmountRequest[]
     pool: BaseInstrumentAmountRequest[]
   }
-  
+
   interface InsolventAccountsResponse {
     prices: InstrumentPriceResponse[];
     accounts: InsolventAccount[];
@@ -246,6 +246,8 @@ interface AlgorandDepositRequest extends BaseInstrumentAmountRequest, BaseDeposi
 }
 interface WormholeDepositRequest extends BaseInstrumentAmountRequest, BaseDepositRequest {
     wormholeVAA: string
+    overrideOriginChain?: ChainId
+    overrideOriginAddress?: UserAddress
 }
 
 type DepositRequest = AlgorandDepositRequest | WormholeDepositRequest
@@ -275,6 +277,20 @@ interface OperationSuccess {
     extraInfo?: any
 }
 
+interface DelegationSuccess {
+    id: DelegationId
+}
+
+interface Delegation {
+    id: DelegationId,
+    name: string,
+    delegatedTo: AccountId,
+    expiresOn: UnixTimestamp,
+    createdOn: UnixTimestamp,
+    lastUsedOn?: UnixTimestamp,
+    revokedOn?: UnixTimestamp
+}
+
 // Array types
 type AccountOrdersResponse = AccountOrderResponse[]
 
@@ -301,6 +317,8 @@ export type {
     AccountBalanceResponse,
     PortfolioOverviewResponse,
     OperationSuccess,
+    DelegationSuccess,
+    Delegation,
     DepositRequest,
     AlgorandDepositRequest,
     WormholeDepositRequest,

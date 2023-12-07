@@ -8,8 +8,10 @@ type MarketId = string
 type InstrumentId = string
 type SlotId = number
 type AccountId = string
+type PairId = number
 type OrderId = string
 type OperationId = string
+type DelegationId = string
 type Base64 = string
 type Hex = string
 type Signature = Base64
@@ -23,9 +25,11 @@ type AppId = number
 type TransactionId = string
 type ClientOrderId = string
 type DecimalPrice = string
+type DecimalAmount = string
 type DecimalPicoUsdPrice = string
 type PicoUsdResponse = string
 type BorrowLendIndex = bigint
+type Address = string
 
 type ContractIds = {
     pricecaster: AppId
@@ -33,6 +37,7 @@ type ContractIds = {
 }
 
 export type {
+    Address,
     BorrowLendIndex,
     Granularity,
     UnixTimestamp,
@@ -44,6 +49,7 @@ export type {
     AccountId,
     OrderId,
     OperationId,
+    DelegationId,
     Base64,
     Hex,
     Signature,
@@ -62,4 +68,6 @@ export type {
     DecimalPrice,
     DecimalPicoUsdPrice,
     PicoUsdResponse,
+    PairId,
+    DecimalAmount,
 }

@@ -36,7 +36,11 @@ import {
     Quantity,
     OrderType,
     OrderSide,
-    ClientOrderId
+    ClientOrderId,
+    ChainId,
+    Delegation,
+    DelegationSuccess,
+    DelegationId,
 } from "@c3exchange/common";
 import HttpClient, { QueryParams } from "./utils/http";
 
@@ -53,6 +57,8 @@ interface AlgorandDeposit extends BaseOperationParams, BaseDeposit {
 }
 interface WormholeDeposit extends BaseOperationParams, BaseDeposit {
     wormholeVAA: Base64
+    overrideOriginChain?: ChainId
+    overrideOriginAddress?: UserAddress
 }
 
 interface CreditOperation extends BaseOperationParams {
@@ -255,6 +261,20 @@ export default class AccountClient {
             sellAmount: cancelTicketOrder.sellAmount.toDecimal(),
             sellId: cancelTicketOrder.sellId,
             refundRequest: cancelTicketOrder.refundRequest,
+        })
+    getDelegations = (accountId: AccountId) => this.client.get<Delegation[]>(`/v1/accounts/${accountId}/delegations`)
+
+    submitRevokeDelegation = (accountId: AccountId, delegationId: DelegationId) =>
+        this.client.delete<DelegationSuccess, DelegationSuccess>(`/v1/accounts/${accountId}/delegations`, { id: delegationId })
+
+    submitNewDelegation = (accountId: AccountId, delegatedTo: AccountId, name: string, nonce: number, expiresOn: UnixTimestampInMiliseconds, signature: RawSignature) =>
+        this.client.post<DelegationSuccess>(`/v1/accounts/${accountId}/delegations`, {
+            accountId,
+            delegatedTo,
+            name,
+            nonce,
+            expiresOn,
+            signature: encodeBase64(signature)
         })
 }
 

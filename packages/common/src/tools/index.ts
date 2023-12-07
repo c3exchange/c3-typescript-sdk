@@ -11,3 +11,4 @@ export * from "./math"
 export * from "./risk"
 export * from "./percentageAmount"
 export * from "./c3performance"
+export * from './rate'

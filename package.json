@@ -6,9 +6,9 @@
     "clean-modules": "npx --yes rimraf --glob **/node_modules",
     "clean-builds": "npx --yes rimraf --glob packages/*/build packages/*/dist",
     "clean-all": "npm run clean-modules && npm run clean-builds",
-    "install-deps-common": "npm i --include-workspace-root -w @c3exchange/common -w @c3exchange/sdk -w c3-sdk",
-    "build-common": "npm run build -w @c3exchange/common -w @c3exchange/sdk -w c3-sdk",
-    "build-common:deploy": "npm run build:deploy -w @c3exchange/common -w @c3exchange/sdk -w c3-sdk",
+    "install-deps-common": "npm i --include-workspace-root -w @c3exchange/common -w @c3exchange/sdk",
+    "build-common": "npm run build -w @c3exchange/common -w @c3exchange/sdk",
+    "build-common:deploy": "npm run build:deploy -w @c3exchange/common -w @c3exchange/sdk",
     "check-deps": "npx check-dependency-version-consistency",
     "fix-deps": "npm run check-deps --fix",
     "postinstall": "npm run check-deps"
