@@ -1,6 +1,6 @@
 import { AssetId, InstrumentSlotId } from "../interfaces"
 
-export  function groupByKey<T>(items: T[], keyGetter: (o:T) => string): Map<string, T[]>{
+export  function groupByKey<T, S = string>(items: T[], keyGetter: (o:T) => S): Map<S, T[]>{
   const ordersByPair = new Map()
   for (const order of items) {
     const key = keyGetter(order)

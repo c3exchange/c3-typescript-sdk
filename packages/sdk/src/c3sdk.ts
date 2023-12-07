@@ -31,8 +31,10 @@ import {
   getWormholeContractsByNetwork,
   InstrumentWithRiskParameters,
   InstrumentWithRiskParametersResponse,
+  encodeAccountId,
+  getPublicKeyByAddress,
 } from "@c3exchange/common"
-import { DepositFundsAlgorand, DepositFundsWormhole, DepositResult, SubmitWormholeVAA, WormholeDepositResult } from "./internal/types"
+import { DepositFundsAlgorand, DepositFundsWormhole, DepositOverrides, DepositResult, SubmitWormholeVAA, WormholeDepositResult } from "./internal/types"
 import { AlgorandDeposit, WormholeDeposit } from "./internal/account_endpoints"
 import { prepareAlgorandDeposit, prepareWormholeDeposit } from "./internal/helpers/deposit"
 import algosdk, { waitForConfirmation } from "algosdk"
@@ -41,7 +43,7 @@ import { ROUNDS_TO_WAIT_ON_DEPOSIT } from "./internal/const"
 import { logger } from "ethers"
 import { asInstrumentWithRiskParameters } from "./internal/helpers/parser"
 
-export { asWormholeDepositResult } from "./internal/helpers/deposit"
+export { asWormholeDepositResult, getWormholeDepositInfo } from "./internal/helpers/deposit"
 export { asWormholeWithdrawResult } from "./internal/helpers/operation"
 
 export class C3SDK {
@@ -121,7 +123,7 @@ export class C3SDK {
 
   getMarkets = (): MarketsEntity => this.markets
 
-  async login <T extends MessageSigner = MessageSigner> (messageSigner: T, accountSession?: AccountSession, webMode = false): Promise<Account<T>> {
+  async login <T extends MessageSigner = MessageSigner> (messageSigner: T, accountSession?: AccountSession, webMode = false, operateOn?: UserAddress): Promise<Account<T>> {
     if (!accountSession) {
       const { address, chainId } = messageSigner
       const nonceRes: { nonce: string } = await this.client.get("/v1/login/start", { address, chainId });
@@ -151,12 +153,22 @@ export class C3SDK {
         findMarketInfoOrFail: this.findMarketInfoOrFail,
         findInstrumentOrFail: this.findInstrumentOrFail,
         services: { wormholeService: this.wormholeService, algod: this.algodClient },
-      }
+      },
+      (operateOn ? encodeAccountId(getPublicKeyByAddress(operateOn)) : undefined),
     );
   }
 
-  public submitWormholeVAA: SubmitWormholeVAA = async (receiverAccountId: AccountId, amount: InstrumentAmount, wormholeVAA: WormholeDeposit["wormholeVAA"], repayAmount: InstrumentAmount, note?: string) => {
-    return this.submitDeposit(receiverAccountId, { instrumentId: amount.instrument.id, amount, wormholeVAA, repayAmount, note })
+  public submitWormholeVAA: SubmitWormholeVAA = async (
+    receiverAccountId: AccountId,
+    amount: InstrumentAmount,
+    wormholeVAA: WormholeDeposit["wormholeVAA"],
+    repayAmount: InstrumentAmount,
+    overrides?: DepositOverrides
+  ) => {
+    return this.submitDeposit(receiverAccountId, {
+      instrumentId: amount.instrument.id, amount, wormholeVAA, repayAmount, note: overrides?.note,
+      overrideOriginAddress: overrides?.originAddress, overrideOriginChain: overrides?.originChain,
+    })
   }
 
   private depositAlgorand: DepositFundsAlgorand = async (
@@ -234,12 +246,14 @@ export class C3SDK {
   public getWormholeService = () => this.wormholeService
 
   private submitDeposit = (accountId: AccountId, payload: AlgorandDeposit | WormholeDeposit) => {
-      let algorandSignedFundingTransaction, wormholeVAA
+      let algorandSignedFundingTransaction, wormholeVAA, overrideOriginAddress, overrideOriginChain
       if ("algorandSignedFundingTransaction" in payload) {
           algorandSignedFundingTransaction = payload.algorandSignedFundingTransaction
       }
       if ("wormholeVAA" in payload) {
           wormholeVAA = payload.wormholeVAA
+          overrideOriginAddress = payload.overrideOriginAddress
+          overrideOriginChain = payload.overrideOriginChain
       }
       return this.client.post<OperationSuccess, Partial<DepositRequest>>(`/v1/accounts/${accountId}/deposit`, {
           amount: payload.amount.toDecimal(),
@@ -248,6 +262,8 @@ export class C3SDK {
           wormholeVAA,
           repayAmount: payload.repayAmount.toDecimal(),
           note: payload.note,
+          overrideOriginAddress,
+          overrideOriginChain,
       })
   }
 

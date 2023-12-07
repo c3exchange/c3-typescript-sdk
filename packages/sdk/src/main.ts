@@ -39,6 +39,8 @@ export type {
     NewOrderDataRequest,
     InstrumentWithRiskParameters,
     NetUserPosition,
+    CCTPChain,
+    BigIntRate,
 } from "@c3exchange/common"
 export type {
     MarketInfo,
@@ -95,11 +97,13 @@ export {
     ERC20Readonly,
     InstrumentAmountMap,
     WormholeService,
-    availableForTradePriceAdjusted
+    availableForTradePriceAdjusted,
+    SUPPORTED_CCTP_CHAINS,
 } from "@c3exchange/common"
 export {
     C3SDK,
     asWormholeDepositResult,
+    getWormholeDepositInfo,
     asWormholeWithdrawResult
 } from "./c3sdk"
 export * from "./internal/helpers/price"
@@ -107,6 +111,7 @@ export * from "./internal/helpers/order"
 export * from "./internal/helpers/operation"
 export * from "./entities/account"
 export * from "./entities/markets"
+export * from "./ws/WebSocketClient"
 export { AxiosError } from "./internal/utils/http"
 
 
@@ -122,10 +127,26 @@ export {
     CoreUserState,
     CoreUserEntry,
     InstrumentInfoFetcher,
+    MaxWithdrawFeesTable,
+    RATE_ONE,
     parseCoreInstruments,
     parseCoreUserState,
     encodeAccountId,
     decodeAccountId,
     isValidAccountId,
     algorandAddressToAccountId,
+    convertFromYearToPeriodInterestRate,
+    convertToYearFromPeriodInterestRate,
+    readMaxWithdrawFeesTable
 } from "@c3exchange/common"
+
+export {
+    SocketId,
+    WebSocketMessages,
+    WebSocketRequests,
+    SnapshotMessage,
+    OpenOrderMessage,
+    TradeMessage,
+    CancelOrderMessage,
+} from "@c3exchange/common"
+export * from './ws/WebSocketClient'

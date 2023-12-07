@@ -28,6 +28,7 @@ interface InstrumentRiskParametersResponse {
     optUtilization: string
 }
 interface InstrumentWithRiskParametersResponse extends Instrument{
+    slotId: number
     riskParameters: InstrumentRiskParametersResponse
 }
 

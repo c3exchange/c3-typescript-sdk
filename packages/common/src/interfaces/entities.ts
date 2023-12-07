@@ -1,7 +1,6 @@
-import type { InstrumentAmount, UsdPrice, ContractAmount, PicoUsdAmount } from "../tools"
-import type { InstrumentId, MarketId, AssetId } from "./types"
-import type { ChainId } from "../wormhole"
-import { PercentageAmount } from "../tools/percentageAmount"
+import { InstrumentAmount, UsdPrice, ContractAmount, PicoUsdAmount, PercentageAmount } from "../tools"
+import { InstrumentId, MarketId, AssetId } from "./types"
+import { ChainId } from "../wormhole"
 
 interface InstrumentChain {
     chainId: ChainId

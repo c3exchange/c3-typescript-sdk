@@ -64,7 +64,12 @@ import {
     encodeBase64,
     OrderSide,
     OrderType,
-    MarketPrice
+    MarketPrice,
+    isValidAccountId,
+    DelegationId,
+    encodeAccountId,
+    getPublicKeyByAddress,
+    createDelegation
 } from "@c3exchange/common"
 import { waitForConfirmation, type Algodv2 } from "algosdk";
 import crypto from "crypto";
@@ -73,6 +78,8 @@ import assert from "assert";
 import { ROUNDS_TO_WAIT } from "../internal/const";
 import { asMargin } from "../internal/helpers/parser"
 import { Margin } from "@c3exchange/common"
+import { getWormholeDepositInfo } from "../main";
+import { WebSocketClient } from "../ws/WebSocketClient"
 
 
 interface GetTradesQuery {
@@ -154,6 +161,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
     private accountId: AccountId
     private httpClient: HttpClient;
     private accountClient: AccountAPIClient
+    private webSocketClient: WebSocketClient
 
     // Cache
     private lastStoredDate = Date.now()
@@ -174,17 +182,21 @@ export default class Account<T extends MessageSigner = MessageSigner> {
                 algod: Algodv2,
                 wormholeService: WormholeService
             }
-        }
+        },
+        operateOn?: AccountId
     ) {
         this.userAddress = this.messageSigner.address
         this.chainId = toSupportedChainId(this.messageSigner.chainId)
-        this.accountId = session.accountId
+        this.accountId = operateOn ?? session.accountId
+        if (!isValidAccountId(this.accountId)) {
+            throw new Error("Invalid provided accountId: " + this.accountId)
+        }
         const headers: Headers = {
             "Authorization": `Bearer ${this.session.token}`
         }
-
         this.httpClient = new HttpClient(this.serverConfig.server, serverConfig.port, headers, this.isWebMode)
         this.accountClient = new AccountAPIClient(this.httpClient)
+        this.webSocketClient = new WebSocketClient(this.serverConfig, this.accountId, this.session.token)
     }
 
     getUserAddress = (): UserAddress => this.userAddress
@@ -304,10 +316,6 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         if (funder instanceof AlgorandSigner) {
             return this.helpers.depositAlgorand(this.accountId, this.userAddress, instrumentAmount, instrumentRepayAmount ?? InstrumentAmount.zero(instrumentAmount.instrument), funder)
         } else if (funder instanceof EVMSigner && chainName) {
-            const chain = instrument.chains.find((c) => c.chainId === toChainId(chainName!))
-            if (!chain) {
-                throw new Error(`Invalid chainName provided: ${chainName}`)
-            }
             return this.helpers.depositWormhole(this.accountId, this.userAddress, instrumentAmount, instrumentRepayAmount ?? InstrumentAmount.zero(instrumentAmount.instrument), funder, chainName)
         }
 
@@ -378,6 +386,8 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         let vaaSignature: Uint8Array
         let wasRedeemed = false
 
+        const isCCTP: boolean = getWormholeDepositInfo(instrument, this.helpers.services.wormholeService.getDictionary(), destinationChainName).isCCTP
+
         const getVAASequence = async () => {
             if (!vaaSequence) {
                 await waitForConfirmation(this.helpers.services.algod, id, ROUNDS_TO_WAIT)
@@ -417,6 +427,11 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         }
 
         const redeemWormholeVAA = async (signer?: Signer, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+            if (isCCTP) {
+                console.warn("Ignoring redeemAndSubmitWormholeVAA for CCTP")
+                // TODO: Handle this in a better way
+                return undefined as any
+            }
             if (wasRedeemed) {
                 throw new Error("VAA was already redeemed")
             }
@@ -734,6 +749,23 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         const signature = await this.messageSigner.signMessage(dataToSign)
 
         return { signature, lease, lastValid }
+    }
+
+    public events() {
+        return this.webSocketClient
+    }
+
+    public getDelegations = async () => this.accountClient.getDelegations(this.accountId)
+
+    public revokeDelegation = async (delegatee: DelegationId) => this.accountClient.submitRevokeDelegation(this.accountId, delegatee)
+
+    public addNewDelegation = async (delegateTo: UserAddress, name: string, expiresOn: UnixTimestampInSeconds) => {
+        const nonce = Date.now()
+        const encodedOperation = createDelegation(delegateTo, nonce, expiresOn)
+        const dataToSign = getDataToSign(encodedOperation, decodeAccountId(this.accountId), new Uint8Array(32), 0)
+        const signature = await this.messageSigner.signMessage(dataToSign)
+
+        return this.accountClient.submitNewDelegation(this.accountId, encodeAccountId(getPublicKeyByAddress(delegateTo)), name, nonce, expiresOn, signature)
     }
 }
 

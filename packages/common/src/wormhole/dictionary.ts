@@ -1,6 +1,15 @@
 import { AppId, AssetId, Instrument } from "../interfaces";
-import { ChainId, ChainName, WormholeEnvironment, XAddress, XAssetId, XContractAddress } from "./types";
-import { AlgorandChainName, CHAIN_ID_ALGORAND, CHAIN_ID_AVAX, CHAIN_ID_ETH, createWrappedAssetMap, toChainName } from "./constants"
+import { ChainId, ChainName, WormholeEnvironment, WormholeNetwork, XAddress, XAssetId, XContractAddress } from "./types";
+import { AlgorandChainName, CHAIN_ID_AVAX, createWrappedAssetMap, toChainId, toChainName } from "./constants"
+
+export const SUPPORTED_CCTP_CHAINS = [
+    // 'arbitrum',
+    'ethereum',
+    // 'optimism',
+    // We should receive USDC AVAX via Wormhole bridge.
+    'avalanche',
+] as const
+export type CCTPChain = typeof SUPPORTED_CCTP_CHAINS[number]
 
 export class WormholeDictionary {
     private tokenBridgeAppId: bigint
@@ -38,22 +47,9 @@ export class WormholeDictionary {
         }
     }
 
-    public getCctpHubAddress(): XAddress {
-        const CCTP_HUB_ADDRESS = {
-            MAINNET: '0xcafecafecafecafecafecafecafecafecafecafe',
-            TESTNET: '0xFe1B7c7749c7AD0Bd9617a41Ac399c8a728a1598',
-            DEVNET: '0xcafecafecafecafecafecafecafecafecafecafe'
-        }
-
-        return {
-            chainId: CHAIN_ID_AVAX,  // This is fixed.
-            address: CCTP_HUB_ADDRESS[this.wormholeEnvironment.WormholeNetwork]
-        }
-    }
-
     public getAvaxUsdcAsaId(): AssetId {
         const AVAX_USDC_ASAID = {
-            MAINNET: 166458877,
+            MAINNET: 1007352535,
             TESTNET: 166458877,
             DEVNET: 0
         }
@@ -135,12 +131,11 @@ export class WormholeDictionary {
                 }
             }
         }
-        const chainLookup = chain as "arbitrum" | "avalanche" | "ethereum" | "optimism";
-        if (!chainLookup) {
+        if (!this.isValidCCTPChain(chain)) {
             throw new Error("Specified chain and network does not have a supported CCTP contract address.")
         }
 
-        return CIRCLE_MESSAGE_TRANSMITTER[this.wormholeEnvironment.WormholeNetwork][chainLookup]
+        return CIRCLE_MESSAGE_TRANSMITTER[this.wormholeEnvironment.WormholeNetwork][chain]
     }
 
     public getWormholeCctpIntegrationContractAddress(chain: ChainName): XContractAddress {
@@ -172,14 +167,63 @@ export class WormholeDictionary {
             }
         }
 
-        const chainLookup = chain as "arbitrum" | "avalanche" | "ethereum" | "optimism";
-        if (!chainLookup) {
+        if (!this.isValidCCTPChain(chain)) {
             throw new Error("Specified chain and network does not have a supported CCTP contract address.")
         }
 
         return {
-            chain: chainLookup,
-            tokenAddress: CCTP_CONTRACT_ADDRESSES[this.wormholeEnvironment.WormholeNetwork][chainLookup].cctp
+            chain,
+            tokenAddress: CCTP_CONTRACT_ADDRESSES[this.wormholeEnvironment.WormholeNetwork][chain].cctp
+        }
+    }
+
+    public getUSDCTokenAddress = (chain: ChainName): XContractAddress => {
+        if (!this.isValidCCTPChain(chain)) {
+            throw new Error("Specified chain and network does not have a supported CCTP contract address.")
+        }
+        const USDC_TOKEN_ADDRESSES: Record<WormholeNetwork, Record<CCTPChain, string>> = {
+            MAINNET: {
+                ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+                avalanche: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+                // arbitrum: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+                // optimism: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
+            },
+            TESTNET: {
+                ethereum: "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
+                avalanche: "0x5425890298aed601595a70AB815c96711a31Bc65",
+                // arbitrum: "0xF175520C52418dfE19C8098071a252da48Cd1C19",
+                // optimism: "0xe05606174bac4A6364B31bd0eCA4bf4dD368f8C6"
+            },
+            DEVNET: {
+                ethereum: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
+                avalanche: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
+                // arbitrum: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
+                // optimism: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe"
+            }
+        }
+
+        return { chain, tokenAddress: USDC_TOKEN_ADDRESSES[this.wormholeEnvironment.WormholeNetwork][chain] }
+    }
+
+    public getCCTPHubChainId(): ChainId {
+        // TODO: ChainId AVAX MUST NOT BE HARDCODED HERE, WE MUST MOVE THIS VALUE INTO ANOTHER PLACE
+        return CHAIN_ID_AVAX;
+    }
+
+    public getCCTPAvailableChains(): CCTPChain[] {
+        return [...SUPPORTED_CCTP_CHAINS];
+    }
+
+    public isValidCCTPChain(chain: ChainName): chain is CCTPChain {
+        return this.getCCTPAvailableChains().includes(chain as any);
+    }
+
+    public isCCTPAsset(chainId: ChainId, tokenAddress: string): boolean {
+        try {
+            const xContractAddress = this.getUSDCTokenAddress(toChainName(chainId))
+            return xContractAddress?.tokenAddress.toLowerCase() === tokenAddress.toLowerCase()
+        } catch (err) {
+            return false
         }
     }
 
@@ -200,7 +244,7 @@ export class WormholeDictionary {
         return native;
     }
 
-    public isCctpWithdraw(instrument: Instrument): boolean {
-        return (instrument.asaId === this.getAvaxUsdcAsaId())
+    public isCctpWithdraw(instrument: Instrument, destinationChain: ChainName): boolean {
+        return (instrument.asaId === this.getAvaxUsdcAsaId()) && (toChainId(destinationChain) !== this.getCCTPHubChainId())
     }
 }

@@ -1,6 +1,7 @@
 import type {
     AccountId,
     AlgorandSigner,
+    ChainId,
     ChainName,
     EVMSigner,
     InstrumentAmount,
@@ -12,7 +13,6 @@ import type {
     OrderType,
     UnixTimestampInSeconds,
     UserAddress,
-    XRecipientAddress
 } from "@c3exchange/common";
 import type { WormholeDeposit } from "./account_endpoints";
 import type { ContractReceipt, Signer, providers } from "ethers";
@@ -35,7 +35,12 @@ interface WormholeDepositResult extends DepositResult {
 type DepositFundsAlgorand = (receiverAccountId: AccountId, receiverUserAddress: UserAddress, amount: InstrumentAmount, repayAmount: InstrumentAmount, funder: AlgorandSigner) => Promise<DepositResult>
 type DepositFundsWormhole = (receiverAccountId: AccountId, receiverUserAddress: UserAddress, amount: InstrumentAmount, repayAmount: InstrumentAmount, funder: EVMSigner, originChain: ChainName) => Promise<WormholeDepositResult>
 
-type SubmitWormholeVAA = (receiverAccountId: AccountId, amount: InstrumentAmount, wormholeVAA: WormholeDeposit["wormholeVAA"], repayAmount: InstrumentAmount, note?: string) => Promise<OperationSuccess>
+interface DepositOverrides {
+    note?: string
+    originChain?: ChainId
+    originAddress?: UserAddress
+}
+type SubmitWormholeVAA = (receiverAccountId: AccountId, amount: InstrumentAmount, wormholeVAA: WormholeDeposit["wormholeVAA"], repayAmount: InstrumentAmount, overrides?: DepositOverrides) => Promise<OperationSuccess>
 
 
 // WITHDRAW TYPES
@@ -80,6 +85,7 @@ export type {
     DepositFundsAlgorand,
     DepositFundsWormhole,
     SubmitWormholeVAA,
+    DepositOverrides,
     WithdrawResult,
     WormholeWithdrawResult,
     Order,

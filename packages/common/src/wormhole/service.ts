@@ -56,9 +56,9 @@ export interface WormholeService {
     createWormholeTxForEthereumRedeem(sender: XRecipientId, vaa: Uint8Array, signer: Signer, overrides?: ethers.Overrides): Promise<ContractReceipt>
     redeemOnAlgorand(sender: XRecipientId, vaa: Uint8Array): Promise<TransactionSignerPair[]>
     createWormholeTxForEvmNetworkDeposit(toAddress: XRecipientId, asset: XAssetId, amount: BigNumberish, repayAmount: bigint, signer: Signer, receiver: string, overrides?: PayableOverrides): Promise<ContractReceipt>
-    createWormholeTxForEvmNetworkDeposit_CCTP(toAddress: XRecipientId, asset: XAssetId, amount: BigNumberish, repayAmount: bigint, signer: Signer, receiver: string, overrides?: PayableOverrides): Promise<ContractReceipt>
+    createWormholeTxForEvmNetworkDeposit_CCTP(toAddress: XRecipientId, asset: XAssetId, amount: BigNumberish, repayAmount: bigint, signer: Signer, receiver: string, hubAddress: string, overrides?: PayableOverrides): Promise<ContractReceipt>
     createWormholeTxForAlgorandNetworkWithdraw(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, optionalArgs?: any) : Promise<TransactionSignerPair[]>
-    createWormholeTxForAlgorandNetworkWithdraw_CCTP(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, optionalArgs?: any) : Promise<TransactionSignerPair[]>
+    createWormholeTxForAlgorandNetworkWithdraw_CCTP(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, hubAddress: string, optionalArgs?: any) : Promise<TransactionSignerPair[]>
     fetchVaaEthereumSource(evmSourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<Uint8Array>
     getWormholeVaaSequenceFromEthereumTx(chain: ChainName,txReceipt: ethers.ContractReceipt ) : string
     getWormholeVaaSequenceFromAlgorandTx (txId: string): Promise<string>
@@ -66,7 +66,7 @@ export interface WormholeService {
     isEthereumTransferComplete (signer: ethers.Signer | ethers.providers.Provider, signedVAA: Uint8Array, evmDestChain: ChainName): Promise<boolean>
     isAlgorandTransferComplete (signedVAA: Uint8Array): Promise<boolean>
     getNetwork(): WormholeNetwork
-    isVaaEnqueuedEthereumSource(evmSourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<boolean> 
+    isVaaEnqueuedEthereumSource(evmSourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<boolean>
 }
 
 //TODO: Would like to depend on an interface here so we can mock Wormhole in tests
@@ -84,8 +84,8 @@ export class WormholeServiceImpl implements WormholeService {
     public getNetwork(): WormholeNetwork {
         return this.wormholeEnvironment.WormholeNetwork
     }
-    
-    buildDepositCallData(asset: XAssetId, toAddress: XRecipientId, repayAmount: bigint, receiver: string) : { payload: Buffer, recipient: XRecipientId } {
+
+    buildDepositCallData(asset: XAssetId, toAddress: XRecipientId, repayAmount: bigint, receiver: string, sender: string) : { payload: Buffer, recipient: XRecipientId } {
 
         if( !isEVMChain(asset.chain) )
             throw new Error(` ${asset.chain} is Not an EVM Chain, cant create Deposit with Ether.js`);
@@ -100,9 +100,15 @@ export class WormholeServiceImpl implements WormholeService {
             tokenAddress: destinationAlgorandContractAddress
         }
 
-        // To support CCTP-cross transfers we need to embed the destination address in the payload.
+        // To support CCTP-cross transfers we need to embed the originator address, chain, and destination appId in the payload.
 
-        let payload = Buffer.concat([Buffer.from(PAYLOAD_ID_STRING), getPublicKeyByAddress(receiver), algosdk.encodeUint64(repayAmount), algosdk.encodeUint64(BigInt(toAddress.tokenAddress))])
+        let payload = Buffer.concat([Buffer.from(PAYLOAD_ID_STRING),
+            getPublicKeyByAddress(receiver),
+            algosdk.encodeUint64(repayAmount),
+            algosdk.encodeUint64(BigInt(toAddress.tokenAddress)),
+            encodeUint16(toChainId(asset.chain)),
+            getPublicKeyByAddress(sender)
+        ])
         return { payload, recipient }
     }
 
@@ -116,7 +122,7 @@ export class WormholeServiceImpl implements WormholeService {
         overrides?: PayableOverrides,
     ): Promise<ContractReceipt> {
 
-        const { payload, recipient } = this.buildDepositCallData(asset, toAddress, repayAmount, receiver)
+        const { payload, recipient } = this.buildDepositCallData(asset, toAddress, repayAmount, receiver, await signer.getAddress())
 
         let tx: ethers.ContractReceipt
         const relayerFee = BigInt(0);
@@ -154,10 +160,11 @@ export class WormholeServiceImpl implements WormholeService {
         repayAmount: bigint,
         signer: Signer,
         receiver: string,
+        hubAddress: string,
         overrides?: PayableOverrides,
     ): Promise<ContractReceipt> {
 
-        const { payload, recipient } = this.buildDepositCallData(asset, toAddress, repayAmount, receiver)
+        const { payload, recipient } = this.buildDepositCallData(asset, toAddress, repayAmount, receiver, await signer.getAddress())
 
         const whCctpAbi: ethers.ContractInterface = [
            "function transferTokensWithPayload(tuple(address token, uint256 amount, uint16 targetChain, bytes32 mintRecipient), uint32 batchId, bytes payload) returns (uint64 messageSequence)" ]
@@ -170,14 +177,13 @@ export class WormholeServiceImpl implements WormholeService {
         const txferParams: CircleIntegration.TransferParameters = {
             token: asset.tokenAddress,
             amount: ethers.BigNumber.from(amount),
-            targetChain: CHAIN_ID_AVAX,  // Hardcoded: We assume C3 CCTP hub is in Avalanche.
-            mintRecipient: tryNativeToUint8Array(this.dictionary.getCctpHubAddress().address, 
-                this.dictionary.getCctpHubAddress().chainId) 
+            targetChain: this.dictionary.getCCTPHubChainId(),
+            mintRecipient: tryNativeToUint8Array(hubAddress, this.dictionary.getCCTPHubChainId())
         }
-        
+
         const transferTx = await whCctpIntegrationContract.transferTokensWithPayload(txferParams, 0n, payload)
         return transferTx.wait()
-    }  
+    }
 
     public async createWormholeTxForAlgorandNetworkWithdraw(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, optionalArgs?: any) : Promise<TransactionSignerPair[]> {
 
@@ -205,31 +211,41 @@ export class WormholeServiceImpl implements WormholeService {
 
     }
 
-    public async createWormholeTxForAlgorandNetworkWithdraw_CCTP(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, optionalArgs?: any) : Promise<TransactionSignerPair[]>
-    {
+    public async createWormholeTxForAlgorandNetworkWithdraw_CCTP(
+        fromXAddress: XRecipientId,
+        toXAddress: XRecipientId,
+        xAsset: XContractAddress,
+        amount: bigint,
+        fee: bigint,
+        hubAddress: string,
+        optionalArgs?: any
+    ) : Promise<TransactionSignerPair[]> {
         if (!optionalArgs || !optionalArgs.appId) {
             throw new Error("Missing source App ID for CCTP transfer")
         }
 
         if(xAsset.chain != fromXAddress.chain ){
-            throw  new Error(`Source asset chain ${xAsset.chain} should match from Account chain ${fromXAddress.chain} `);
+            throw  new Error(`Source asset chain ${xAsset.chain} should match from Account chain ${fromXAddress.chain} `)
         }
 
         if(fromXAddress.chain !== AlgorandChainName)
-            throw  new Error(`Source Address needs to be ${AlgorandChainName} `);
+            throw  new Error(`Source Address needs to be ${AlgorandChainName} `)
 
-        const cctpHubInfo = this.dictionary.getCctpHubAddress()
+        const cctpWithdrawPayload = Buffer.concat([
+            Buffer.from('cctpWithdraw'),
+            Buffer.from(toXAddress.tokenAddress, 'hex'),
+            encodeUint16(toChainId(toXAddress.chain)),
+            encodeUint64(optionalArgs.appId)
+        ])
 
-        const cctpWithdrawPayload = Buffer.concat([Buffer.from('cctpWithdraw'), Buffer.from(toXAddress.tokenAddress, 'hex'), encodeUint16(toChainId(toXAddress.chain)), encodeUint64(optionalArgs.appId)])
-
-        return await transferFromAlgorand(this.algodClient, 
+        return await transferFromAlgorand(this.algodClient,
             toBigInt(this.dictionary.getTokenBridgeAppId()),
             toBigInt(this.dictionary.getCoreAppId()),
             fromXAddress.tokenAddress,
             BigInt(xAsset.tokenAddress),
             amount,
-            cctpHubInfo.address,
-            cctpHubInfo.chainId,
+            hubAddress,
+            this.dictionary.getCCTPHubChainId(),
             fee,
             Uint8Array.from(cctpWithdrawPayload))
     }

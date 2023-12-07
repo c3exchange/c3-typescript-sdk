@@ -71,9 +71,9 @@ const marketInfos: MarketInfo[] = [
 
 const riskParams: RiskParametersResponse = { margin: "0", haircut: "0"}
 const instruments: InstrumentWithRiskParametersResponse[] = [
-    {...ALGO_INSTRUMENT,riskParameters: {initial: riskParams , maintenance: riskParams, optUtilization: "0.5"}},
-    {...BTC_INSTRUMENT,riskParameters: {initial: riskParams , maintenance: riskParams, optUtilization: "0.5"}},
-    {...USDC_INSTRUMENT,riskParameters: {initial: riskParams , maintenance: riskParams, optUtilization: "0.5"}},
+    { ...ALGO_INSTRUMENT, slotId: 0, riskParameters: { initial: riskParams, maintenance: riskParams, optUtilization: "0.5" } },
+    { ...BTC_INSTRUMENT, slotId: 1, riskParameters: { initial: riskParams, maintenance: riskParams, optUtilization: "0.5" } },
+    { ...USDC_INSTRUMENT, slotId: 2, riskParameters: { initial: riskParams, maintenance: riskParams, optUtilization: "0.5" } },
 ]
 
 const CREATOR_ADDRESS = "YHCJOEQE3VND4ELFHZJMTSJWOCNVLQHAWLGYWDDF3YVVOYXPDG54VL62F4"
