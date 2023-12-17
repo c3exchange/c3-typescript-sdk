@@ -47,4 +47,4 @@ AlgorandSignerlogin().catch((error) =>
   console.log("Error in execution.", error)
 );
 
-// EVMSignerLogin().catch(error => console.log("Error in execution.", error))
+EVMSignerLogin().catch(error => console.log("Error in execution.", error))
