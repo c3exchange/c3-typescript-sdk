@@ -72,7 +72,8 @@ describe('availableForTrade', () => {
                 [AVAX.asaId, InstrumentAmount.fromDecimal(AVAX, "119")],
                 [USDC.asaId, InstrumentAmount.fromDecimal(USDC, "3")]
             ]),
-            poolBalance: new InstrumentAmountMap()
+            poolBalance: new InstrumentAmountMap(),
+            interestMicrounits: new Map(),
         }
 
         const marginCalculation: Margin = {
@@ -122,7 +123,8 @@ describe('availableForTrade', () => {
                 [AVAX.asaId, InstrumentAmount.fromDecimal(AVAX, "10")],
                 [USDC.asaId, InstrumentAmount.fromDecimal(USDC, "2")]
             ]),
-            poolBalance: new InstrumentAmountMap()
+            poolBalance: new InstrumentAmountMap(),
+            interestMicrounits: new Map(),
         }
         // Simple scenario where we have 10 USDC and we want to buy ETH
 
@@ -147,7 +149,8 @@ describe('availableForTrade', () => {
         const userPosition: NetUserPosition = {
             availableCash: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
             cashBalance: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
-            poolBalance: new InstrumentAmountMap()
+            poolBalance: new InstrumentAmountMap(),
+            interestMicrounits: new Map(),
         }
         // Simple scenario where we have 10 USDC and we want to buy ETH
 
@@ -170,7 +173,8 @@ describe('availableForTrade', () => {
         const userPosition: NetUserPosition = {
             availableCash: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
             cashBalance: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
-            poolBalance: new InstrumentAmountMap()
+            poolBalance: new InstrumentAmountMap(),
+            interestMicrounits: new Map(),
         }
         // Simple scenario where we have 10 USDC and we want to buy ETH
 
@@ -196,7 +200,8 @@ describe('availableForTrade', () => {
         const userPosition: NetUserPosition = {
             availableCash: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
             cashBalance: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
-            poolBalance: new InstrumentAmountMap()
+            poolBalance: new InstrumentAmountMap(),
+            interestMicrounits: new Map(),
         }
         // Simple scenario where we have 10 USDC and we want to buy ETH
 
@@ -223,7 +228,8 @@ describe('availableForTrade', () => {
         const userPosition: NetUserPosition = {
             availableCash: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
             cashBalance: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
-            poolBalance: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "-2")]])
+            poolBalance: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "-2")]]),
+            interestMicrounits: new Map(),
         }
         // Simple scenario where we have 10 USDC and we want to buy ETH
 
@@ -252,7 +258,8 @@ describe('availableForTrade', () => {
         const userPosition: NetUserPosition = {
             availableCash: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
             cashBalance: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
-            poolBalance: new InstrumentAmountMap()
+            poolBalance: new InstrumentAmountMap(),
+            interestMicrounits: new Map(),
         }
         // Simple scenario where we have 10 USDC and we want to buy ETH
 
@@ -303,7 +310,8 @@ describe('availableForTrade', () => {
         const userPosition: NetUserPosition = {
             availableCash: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
             cashBalance: new InstrumentAmountMap([[USDC.asaId, InstrumentAmount.fromDecimal(USDC, "10")]]),
-            poolBalance: new InstrumentAmountMap()
+            poolBalance: new InstrumentAmountMap(),
+            interestMicrounits: new Map(),
         }
         // Simple scenario where we have 10 USDC and we want to buy ETH
 
@@ -403,7 +411,8 @@ describe('availableForTrade', () => {
             poolBalance: new InstrumentAmountMap([
                 [ETH.asaId, InstrumentAmount.fromDecimal(ETH, "-0.6")],
                 [BTC.asaId, InstrumentAmount.fromDecimal(BTC, "0.1")]
-            ])
+            ]),
+            interestMicrounits: new Map(),
         }
 
         // Simple scenario where we have 10 USDC and we want to buy ETH
@@ -494,7 +503,8 @@ describe('availableForTrade', () => {
             poolBalance: new InstrumentAmountMap([
                 [ETH.asaId, InstrumentAmount.fromDecimal(ETH, "-1.2")],
                 [BTC.asaId, InstrumentAmount.fromDecimal(BTC, "0.1")]
-            ])
+            ]),
+            interestMicrounits: new Map(),
         }
 
         // Simple scenario where we have 10 USDC and we want to buy ETH
@@ -583,7 +593,8 @@ describe('availableForTrade', () => {
             poolBalance: new InstrumentAmountMap([
                 [ETH.asaId, InstrumentAmount.fromDecimal(ETH, "-1.2")],
                 [BTC.asaId, InstrumentAmount.fromDecimal(BTC, "0.1")]
-            ])
+            ]),
+            interestMicrounits: new Map(),
         }
         // Simple scenario where we have 10 USDC and we want to buy ETH
         const margin = marginWithoutOrders(userPosition, instruments, prices, true)
@@ -666,7 +677,8 @@ describe('availableForTrade', () => {
             poolBalance: new InstrumentAmountMap([
                 [ETH.asaId, InstrumentAmount.fromDecimal(ETH, "-1.2")],
                 [BTC.asaId, InstrumentAmount.fromDecimal(BTC, "0.1")]
-            ])
+            ]),
+            interestMicrounits: new Map(),
         }
 
         // Simple scenario where we have 10 USDC and we want to buy ETH
@@ -754,7 +766,8 @@ describe('availableForTrade', () => {
             poolBalance: new InstrumentAmountMap([
                 [ETH.asaId, InstrumentAmount.fromDecimal(ETH, "-1.2")],
                 [BTC.asaId, InstrumentAmount.fromDecimal(BTC, "0.1")]
-            ])
+            ]),
+            interestMicrounits: new Map(),
         }
 
         // Simple scenario where we have 10 USDC and we want to buy ETH
@@ -827,7 +840,8 @@ describe('availableForTrade', () => {
             ]),
             poolBalance: new InstrumentAmountMap([
                 [USDC.asaId, InstrumentAmount.fromDecimal(ETH, "-10")],
-            ])
+            ]),
+            interestMicrounits: new Map(),
         }
 
         // Simple scenario where we have 10 USDC and we want to buy ETH

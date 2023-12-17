@@ -34,7 +34,16 @@ export interface SignedOrderData {
     data: OrderData,
     signature: Signature,
     creator: UserAddress,
-    id: OrderId // FIXME: This id should not be here but moving it outside SignedOrderData requires a lot of changes.
+    id: OrderId,
+    clientOrderId: string
+}
+
+export interface SubmitOrderData {
+    data: OrderData,
+    signature: Signature,
+    creator: UserAddress,
+    id: OrderId,
+    clientOrderId: string
 }
 
 export type OrderFees = {
@@ -57,10 +66,10 @@ export function encodeOrderWithHeader(data: OrderData): { dataToSign: Uint8Array
     return { dataToSign, id }
 }
 
-export async function signOrder(data: OrderData, signer: MessageSigner): Promise<SignedOrderData> {
+export async function signOrder(data: OrderData, signer: MessageSigner, clientOrderId = ''): Promise<SignedOrderData> {
     const { dataToSign, id } = encodeOrderWithHeader(data)
     const signature = await signer.signMessage(dataToSign)
-    return { data, signature: encodeBase64(signature), creator: signer.address, id }
+    return { data, signature: encodeBase64(signature), creator: signer.address, id, clientOrderId }
 }
 
 const ORDER_OPERATION_STR = '06'

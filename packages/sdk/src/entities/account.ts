@@ -372,7 +372,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
                 amount: instrumentAmount,
                 isTransferCompleted: async () => {
                     try {
-                        await waitForConfirmation(this.helpers.services.algod, id, ROUNDS_TO_WAIT)
+                        await this.waitForConfirmation(id)
                         return true
                     } catch (err) {
                         return false
@@ -390,7 +390,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
 
         const getVAASequence = async () => {
             if (!vaaSequence) {
-                await waitForConfirmation(this.helpers.services.algod, id, ROUNDS_TO_WAIT)
+                await this.waitForConfirmation(id)
                 vaaSequence = await this.helpers.services.wormholeService.getWormholeVaaSequenceFromAlgorandTx(extraInfo.sendTransferTxId)
             }
             return vaaSequence
@@ -484,7 +484,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             lastValid,
             signature,
         })
-        await waitForConfirmation(this.helpers.services.algod, result.id, ROUNDS_TO_WAIT)
+        await this.waitForConfirmation(result.id)
         return result.id
     }
 
@@ -502,7 +502,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             lastValid,
             signature,
         })
-        await waitForConfirmation(this.helpers.services.algod, result.id, ROUNDS_TO_WAIT)
+        await this.waitForConfirmation(result.id)
         return result.id
     }
 
@@ -520,7 +520,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             lastValid,
             signature,
         })
-        await waitForConfirmation(this.helpers.services.algod, result.id, ROUNDS_TO_WAIT)
+        await this.waitForConfirmation(result.id)
         return result.id
     }
 
@@ -535,7 +535,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             instrumentId: instrument.id,
             amount: instrumentAmount, lease, lastValid, signature,
         })
-        await waitForConfirmation(this.helpers.services.algod, result.id, ROUNDS_TO_WAIT)
+        await this.waitForConfirmation(result.id)
         return result.id
     }
 
@@ -566,7 +566,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             liabilityBasket: pool.map((amount) => ({ instrumentId: amount.instrument.id, amount })),
             lease, lastValid, signature,
         })
-        await waitForConfirmation(this.helpers.services.algod, result.id, ROUNDS_TO_WAIT)
+        await this.waitForConfirmation(result.id)
         return result.id
     }
 
@@ -652,7 +652,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
                 maxBuyAmountToPool: maxRepay?.toContract() || BigInt(0),
                 nonce: orderNonce,
                 expiresOn,
-            }, this.messageSigner)
+            }, this.messageSigner, clientOrderId)
         }
         const getBuySellAmounts =  (order: Order):[sellAmount: InstrumentAmount, buyAmount: InstrumentAmount] => {
             if(order.type === "market") {
@@ -753,6 +753,10 @@ export default class Account<T extends MessageSigner = MessageSigner> {
 
     public events() {
         return this.webSocketClient
+    }
+
+    private waitForConfirmation = async (txId: string) => {
+        await waitForConfirmation(this.helpers.services.algod, txId, ROUNDS_TO_WAIT)
     }
 
     public getDelegations = async () => this.accountClient.getDelegations(this.accountId)

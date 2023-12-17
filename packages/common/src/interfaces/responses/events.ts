@@ -13,6 +13,7 @@ interface BaseOpenOrderMessage {
     side: OrderSide,
     price?: DecimalPrice,
     type: OrderType,
+    clientOrderId?: string,
 }
 
 interface OpenOrderMessage extends AccountIdMessage, BaseOpenOrderMessage {}
@@ -27,12 +28,14 @@ interface BaseTradeMessage {
     fees: DecimalPrice,
     feesInstrument: InstrumentId,
     isComplete: boolean,
+    clientOrderId?: string,
 }
 
 interface TradeMessage extends AccountIdMessage, BaseTradeMessage {}
 
 interface BaseCancelOrderMessage {
     orderId: OrderId,
+    clientOrderId?: string,
 }
 
 interface CancelOrderMessage extends AccountIdMessage, BaseCancelOrderMessage {}
