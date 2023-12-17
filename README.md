@@ -20,7 +20,7 @@ For detailed information about the API and its capabilities, please refer to the
 NOTE: if signing using an EVM Wallet, ethers.js version 5 is supported 
 
 ```
-npm install @c3exchange/sdk@0.4.0-alpha.2 ethers@5
+npm install @c3exchange/sdk@0.4.0-alpha.3 ethers@5
 ```
 ## Quick Start
 

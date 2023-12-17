@@ -31,7 +31,7 @@
         "typescript": "^5.2.2"
     },
     "dependencies": {
-        "@c3exchange/sdk": "^0.4.0-alpha.1",
+        "@c3exchange/sdk": "^0.4.0-alpha.3",
         "ethers": "^5.7.2"
     }
 }

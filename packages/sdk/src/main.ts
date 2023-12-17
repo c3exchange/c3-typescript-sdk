@@ -41,6 +41,7 @@ export type {
     NetUserPosition,
     CCTPChain,
     BigIntRate,
+    Delegation,
 } from "@c3exchange/common"
 export type {
     MarketInfo,

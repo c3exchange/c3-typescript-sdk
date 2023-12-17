@@ -175,6 +175,7 @@ export class InstrumentAmountMap extends Map<AssetId,InstrumentAmount> {
 export type UserPosition = {
     cashBalance: InstrumentAmountMap
     poolBalance: InstrumentAmountMap
+    interestMicrounits: Map<AssetId, boolean>
 }
 
 export type NetUserPosition = UserPosition & {

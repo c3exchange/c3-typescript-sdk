@@ -1,18 +1,17 @@
 import "mocha"
 import { expect } from "chai"
-import "../helpers/mock.responses"
+import { generateMockedLogin, mockedServer } from "../helpers/mock.responses"
 import Market from "../../../src/entities/markets"
 import { defaultConfig } from "../../../src/config"
 import AccountClient from "../../../src/entities/account"
 import { C3SDK, C3SDKConfig } from "../../../src"
-import { AlgorandSigner, CHAIN_ID_ALGORAND } from "@c3exchange/common"
+import { ALGO_INSTRUMENT, AlgorandSigner, CHAIN_ID_ALGORAND, CHAIN_ID_ETH, InstrumentAmount, Signer, encodeBase64 } from "@c3exchange/common"
+import { ALGORAND_ACCOUNT, ALGORAND_ACCOUNT_ID } from "../helpers/mock.resources"
+import algosdk from "algosdk"
 
 describe ("C3Sdk tests", () => {
-    const address = "XROK3OJI5BFYZ4LI3EJJLZNXR5G5BXDRM2455KEZ4ZUTBAOHGFFPMVXFJE";
-    const chainId = CHAIN_ID_ALGORAND;
-
+    const sdk = new C3SDK()
     it("Should instantiate the class without arguments", () => {
-        const sdk = new C3SDK()
         // @ts-expect-error
         expect(sdk.config).to.be.deep.equal(defaultConfig)
     })
@@ -28,36 +27,46 @@ describe ("C3Sdk tests", () => {
                 wormhole_network: "DEVNET"
             }
         }
-        const sdk = new C3SDK(config)
+        const newSdk = new C3SDK(config)
         // @ts-expect-error
-        expect(sdk.config).to.be.deep.equal(config)
+        expect(newSdk.config).to.be.deep.equal(config)
     })
     it("Should have markets attribute", () => {
-        const sdk = new C3SDK()
         expect(sdk).itself.to.respondTo("getMarkets")
         expect(sdk.getMarkets()).to.be.instanceOf(Market)
     })
     it("Should call getInstruments method", async () => {
-        const sdk = new C3SDK()
         expect(sdk).itself.to.respondTo("getInstruments")
-        await sdk.getInstruments()
+        const instruments = await sdk.getInstruments()
+        expect(instruments).to.be.an("array")
+        for (const instrument of instruments) {
+            expect(instrument, `Instrument: ${instrument.id}`).to.have.ownProperty("id")
+            expect(instrument, `Instrument: ${instrument.id}`).to.have.ownProperty("asaId")
+            expect(instrument, `Instrument: ${instrument.id}`).to.have.ownProperty("asaName")
+            expect(instrument, `Instrument: ${instrument.id}`).to.have.ownProperty("asaUnitName")
+            expect(instrument, `Instrument: ${instrument.id}`).to.have.ownProperty("asaDecimals")
+            expect(instrument, `Instrument: ${instrument.id}`).to.have.ownProperty("chains")
+            expect(instrument.chains, `Instrument: ${instrument.id}`).to.be.an("array")
+        }
     })
-    it("Should login with address and chainId and get an AccountClient interface", async () => {
-        const sdk = new C3SDK()
-        const algorandSigner = new AlgorandSigner(
-            address, (txs) => Promise.resolve([new Uint8Array()]),
-            () => Promise.resolve(new Uint8Array(Buffer.from("'ckZv+nU2/gfUs944SEjDbo6xl33wt33jah1lshabpAQ='", 'ascii')))
-        )
-        const accountClient = await sdk.login(algorandSigner);
+    it("Should login with Algorand address and get an AccountClient interface", async () => {
+        const { signer } = generateMockedLogin(CHAIN_ID_ALGORAND)
+        const accountClient = await sdk.login(signer);
+        expect(accountClient).to.be.instanceOf(AccountClient);
+        expect(accountClient).to.have.ownProperty("session");
+    })
+
+    it("Should login with EVM address and get an AccountClient interface", async () => {
+        const { signer } = generateMockedLogin(CHAIN_ID_ETH)
+        const accountClient = await sdk.login(signer);
         expect(accountClient).to.be.instanceOf(AccountClient);
         expect(accountClient).to.have.ownProperty("session");
     })
 
     it("Should fail to login with wrong address and chainId", async () => {
         try {
-            const sdk = new C3SDK()
             const algorandSigner = new AlgorandSigner(
-                address, (txs) => Promise.resolve([new Uint8Array()]),
+                ALGORAND_ACCOUNT.addr, (txs) => Promise.resolve([new Uint8Array()]),
                 () => Promise.reject(new Error("Wrong signature"))
             )
             await sdk.login(algorandSigner);
@@ -65,5 +74,33 @@ describe ("C3Sdk tests", () => {
         } catch (e) {
             expect(e).to.be.instanceOf(Error);
         }
+    })
+
+    it ("Should sign nonce", async () => {
+        const nonce = "Hello world"
+        const signer = new Signer().addFromSecretKey(ALGORAND_ACCOUNT.sk)
+        // @ts-expect-error
+        const signature = await sdk.signNonce(nonce, signer)
+        const expectedSignature = encodeBase64(algosdk.signBytes(Buffer.from(nonce, "ascii"), ALGORAND_ACCOUNT.sk))
+        expect(signature).to.be.equal(expectedSignature)
+    })
+
+    it ("Should submit wormholeVAA", async () => {
+        const accountId = ALGORAND_ACCOUNT_ID
+        const amountToDeposit = InstrumentAmount.fromDecimal(ALGO_INSTRUMENT, "100")
+        const amountToRepay = InstrumentAmount.fromDecimal(ALGO_INSTRUMENT, "10")
+        const wormholeVAA = "AQAAAAABAJxaWP3F73N6qyN7Zmimk0MjAL8FQf/gaZnpJ66ecpqKNcfsn2C2b/GwwbzBUKhAU4EI\
+        ZHjWcPa6tDpBc7tKhgYAZNVMjMx3AQAABgAAAAAAAAAAAAAAAGHkTlBspWWebAu6m2eFhvotcpdWAAAAAAAAHLwBAwAAAAAAAAAAAAAAAAAAAA\
+        AAAAAAAAAAAAAAAAAGskJOAAAAAAAAAAAAAAAA5lTbnfR9/pUYdaVyI2/tWSzsKisABgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQNpdo\
+        AAgAAAAAAAAAAAAAAADeAeCIRyxRChGJgO2/saF/FuLX93dvcm1ob2xlRGVwb3NpdAAAAAAAAAAAAAAAAN4B4IhHLFEKEYmA7b+xoX8W4tf3AA\
+        AAAAayQk4="
+        mockedServer.post(`/v1/accounts/${accountId}/deposit`, {
+            amount: amountToDeposit.toDecimal(),
+            instrumentId: ALGO_INSTRUMENT.id,
+            wormholeVAA,
+            repayAmount: amountToRepay.toDecimal(),
+        }).reply(200, { id: "CAFCAFCAFCAFCAFCAFCAFCAFCAF" })
+        const response = await sdk.submitWormholeVAA(accountId, amountToDeposit, wormholeVAA, amountToRepay)
+        expect(response.id).to.be.a("string")
     })
 })
