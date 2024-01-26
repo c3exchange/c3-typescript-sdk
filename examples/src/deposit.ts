@@ -12,7 +12,7 @@ const c3sdk = new C3SDK({
     wormhole_network: "TESTNET",
   },
   algorand_node: {
-    server: "https://algolite.test.c3.io", // "https://algolite.c3.io" Mainnet node
+    server: "https://testnet-api.algonode.cloud", // "https://mainnet-api.algonode.cloud" Mainnet node
   },
 });
 
