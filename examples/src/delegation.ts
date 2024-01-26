@@ -7,7 +7,7 @@ const c3sdk = new C3SDK({
       wormhole_network: "TESTNET",
     },
     algorand_node: {
-      server: "https://node.testnet.algoexplorerapi.io", // "https://node.algoexplorerapi.io" Mainnet node
+      server: "https://testnet-api.algonode.cloud", // "https://mainnet-api.algonode.cloud" Mainnet node
     },
 });
 
