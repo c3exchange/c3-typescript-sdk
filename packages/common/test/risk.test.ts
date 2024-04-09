@@ -857,4 +857,79 @@ describe('availableForTrade', () => {
 
 
     })
+
+    it('Border Case ', () => {
+
+        const USDC: Instrument = { asaName: "USDC", asaDecimals: 6, asaId: 1007352535, asaUnitName: "USDC", id: "USDC", chains: [] }
+        const ALGO: Instrument = { asaName: "ALGO", asaDecimals: 6, asaId: 0, asaUnitName: "ALGO", id: "ALGO", chains: [] }
+        const AVAX: Instrument = { asaName: "AVAX", asaDecimals: 8, asaId: 893309613, asaUnitName: "AVAX", id: "AVAX", chains: [] }
+        const ETH: Instrument = { asaName: "ETH", asaDecimals: 8, asaId: 887406851, asaUnitName: "ETH", id: "ETH", chains: [] }
+
+        const ALGO_USDC : Market = {id: "ALGO_USDC", baseInstrument: ALGO, quoteInstrument: USDC }
+
+        const createRiskParameters = (haircut: string, margin: string, haircutInitial: string, marginInitial:string, optUtil: string) =>{
+            return {
+                initial: { haircut: PercentageAmount.fromDecimal(haircutInitial), margin: PercentageAmount.fromDecimal(marginInitial)},
+                maintenance: {haircut: PercentageAmount.fromDecimal(haircut), margin: PercentageAmount.fromDecimal(margin)},
+                optUtilization: PercentageAmount.fromDecimal(optUtil)
+            }
+        }
+
+        const USDC_RiskParameters: InstrumentWithRiskAndPoolParameters = {
+            ...USDC,
+            riskParameters: createRiskParameters("0.01","0.01","0.06","0.03","0.660"),
+            poolParameters: {
+                minRate: PercentageAmount.fromDecimal("0"),
+                maxRate: PercentageAmount.fromDecimal("0.80"),
+                optRate: PercentageAmount.fromDecimal("0.439"),
+                optimalUtilization: PercentageAmount.fromDecimal("0.8")
+            }
+        }
+
+        const ALGO_RiskParameters: InstrumentWithRiskAndPoolParameters = {
+            ...ALGO,
+            riskParameters: createRiskParameters("0.43","0.08","0.5","0.14","0.660"),
+            poolParameters: {
+                maxRate: PercentageAmount.fromDecimal("0.439"),
+                minRate: PercentageAmount.fromDecimal("0"),
+                optRate: PercentageAmount.fromDecimal("0.124"),
+                optimalUtilization: PercentageAmount.fromDecimal("0.45")
+            }
+        }
+
+
+
+        const userPosition: NetUserPosition = {
+            availableCash: new InstrumentAmountMap([
+                [AVAX.asaId, InstrumentAmount.fromDecimal(AVAX, "0.5")],
+                [ETH.asaId, InstrumentAmount.fromDecimal(USDC, "0.018")],
+            ]),
+            cashBalance: new InstrumentAmountMap([
+                [AVAX.asaId, InstrumentAmount.fromDecimal(AVAX, "0.5")],
+                [ETH.asaId, InstrumentAmount.fromDecimal(USDC, "0.018")],
+            ]),
+            poolBalance: new InstrumentAmountMap([
+                [USDC.asaId, InstrumentAmount.fromDecimal(ETH, "-39")],
+            ]),
+            interestMicrounits: new Map(),
+        }
+
+        // Simple scenario where we have 10 USDC and we want to buy ETH
+        const margin: Margin = {
+            prices: new Map([
+                [USDC.asaId, 999927n ],
+                [ALGO.asaId, 205259n]
+            ]),
+            support: 41024311900000n,
+            requirement: 40478408710438n,
+            isInitialMargin: true,
+            shortfalls: new Map(),
+            unoffsetLiabilities: new Map(),
+        }
+
+        const orderPrice = MarketPrice.fromDecimal(ALGO_USDC, "0.5")
+
+        const maxAvailableTradeBase = availableForTradePriceAdjusted( ALGO_RiskParameters, USDC_RiskParameters, margin, orderPrice, userPosition, "debug_prefix")
+        expect(maxAvailableTradeBase.greaterThanOrEqual(InstrumentAmount.fromDecimal(maxAvailableTradeBase.instrument,"999999999"))).to.equal(true)
+    })
 })

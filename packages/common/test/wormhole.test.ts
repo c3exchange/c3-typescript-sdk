@@ -1,6 +1,6 @@
 import "mocha"
 import { expect } from "chai"
-import { WormholeDictionary, getWormholeContractsByNetwork, validateEthereumVaa } from "../src/wormhole"
+import { ArbitrumChainName, ArbitrumSepoliaChainName, AvalancheChainName, EthereumChainName, WormholeDictionary, getWormholeContractsByNetwork, validateVaa } from "../src/wormhole"
 import { ALGO_INSTRUMENT, AssetId, Instrument, decodeBase64 } from "../src"
 import algosdk from "algosdk"
 
@@ -20,6 +20,14 @@ describe("Wormhole helper tests", () => {
         expect(dictionary.isWormholeAppId(Number.parseInt(dictionary.getCoreAppId().toString()))).to.be.true
         expect(dictionary.isWormholeAppId(Number.parseInt(dictionary.getTokenBridgeAppId().toString()))).to.be.true
         expect(dictionary.isWormholeAppId(0)).to.be.false
+        expect(dictionary.getWrappedNativeCurrencyAddress(EthereumChainName).tokenAddress).to.be.equal("0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6")
+        expect(dictionary.getWrappedNativeCurrencyAddress(EthereumChainName).chain).to.be.equal(EthereumChainName)
+        expect(dictionary.getWrappedNativeCurrencyAddress(AvalancheChainName).tokenAddress).to.be.equal("0x9c3c9283d3e44854697cd22d3faa240cfb032889")
+        expect(dictionary.getWrappedNativeCurrencyAddress(AvalancheChainName).chain).to.be.equal(AvalancheChainName)
+        expect(dictionary.getWrappedNativeCurrencyAddress(ArbitrumChainName).tokenAddress).to.be.equal("")
+        expect(dictionary.getWrappedNativeCurrencyAddress(ArbitrumChainName).chain).to.be.equal(ArbitrumChainName)
+        expect(dictionary.getWrappedNativeCurrencyAddress(ArbitrumSepoliaChainName).tokenAddress).to.be.equal("0x980B62Da83eFf3D4576C647993b0c1D7faf17c73")
+        expect(dictionary.getWrappedNativeCurrencyAddress(ArbitrumSepoliaChainName).chain).to.be.equal(ArbitrumSepoliaChainName)
     })
     it("Should validate ethereum wormholeVAA successfully", () => {
         const AVAX_INSTRUMENT: Instrument = {
@@ -42,7 +50,7 @@ describe("Wormhole helper tests", () => {
             from,
             fromChainId,
             instrument,
-        } = validateEthereumVaa(wormholeVAA, instruments, 272013160)
+        } = validateVaa(wormholeVAA, instruments, 272013160)
         expect(from.toLowerCase()).to.be.equal("0xDe01e088472C510a118980edbFb1A17F16e2D7f7".toLowerCase())
         expect(fromChainId).to.be.equal(AVAX_INSTRUMENT.chains[0].chainId)
         expect(instrument).to.be.deep.equal(AVAX_INSTRUMENT)
@@ -88,7 +96,7 @@ describe("Wormhole helper tests", () => {
             from,
             fromChainId,
             instrument,
-        } = validateEthereumVaa(wormholeVAA, instruments, 294875307)
+        } = validateVaa(wormholeVAA, instruments, 294875307)
 
         expect(from.toLowerCase()).to.be.equal("0xdee6b1a01329f737020547c30ed35228e78a0cf2".toLowerCase())
         expect(fromChainId).to.be.equal(USDC_INSTRUMENT.chains[0].chainId)

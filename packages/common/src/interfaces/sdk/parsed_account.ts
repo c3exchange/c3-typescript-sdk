@@ -1,12 +1,13 @@
 import { InstrumentAmount, MarketPrice } from "../../tools"
 import { OrderType, OrderSide, AccountSide } from "../responses"
-import { UnixTimestamp, MarketId, OrderId, ClientOrderId, UserAddress } from "../types"
+import { UnixTimestamp, MarketId, OrderId, FillId, ClientOrderId, UserAddress } from "../types"
 import { SettlementTicket } from "../../internal/index"
 
 
 
 interface MarketTrade {
     marketId: MarketId
+    fillId: FillId
     buyOrderId: string
     sellOrderId: string
     tradeOn: UnixTimestamp
@@ -14,6 +15,10 @@ interface MarketTrade {
     tradeQuoteAmount: InstrumentAmount
     tradeBuyFees: InstrumentAmount
     tradeSellFees: InstrumentAmount
+    tradeBuyBorrow: InstrumentAmount
+    tradeBuyRepay: InstrumentAmount
+    tradeSellBorrow: InstrumentAmount
+    tradeSellRepay: InstrumentAmount
     tradePrice: MarketPrice
     buyOrderCompleted: boolean
     sellOrderCompleted: boolean

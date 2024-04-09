@@ -11,13 +11,17 @@ import type {
     OperationSuccess,
     OrderSide,
     OrderType,
+    SolanaSigner,
     UnixTimestampInSeconds,
     UserAddress,
 } from "@c3exchange/common";
 import type { WormholeDeposit } from "./account_endpoints";
 import type { ContractReceipt, Signer, providers } from "ethers";
+import type { Connection } from "@solana/web3.js";
 
 // DEPOSIT TYPES
+
+type WormholeSigner = EVMSigner | SolanaSigner
 interface DepositResult {
     instrumentId: InstrumentId
     txId: string
@@ -32,8 +36,8 @@ interface WormholeDepositResult extends DepositResult {
     redeemAndSubmitWormholeVAA: (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => Promise<string>
 }
 
-type DepositFundsAlgorand = (receiverAccountId: AccountId, receiverUserAddress: UserAddress, amount: InstrumentAmount, repayAmount: InstrumentAmount, funder: AlgorandSigner) => Promise<DepositResult>
-type DepositFundsWormhole = (receiverAccountId: AccountId, receiverUserAddress: UserAddress, amount: InstrumentAmount, repayAmount: InstrumentAmount, funder: EVMSigner, originChain: ChainName) => Promise<WormholeDepositResult>
+type DepositFundsAlgorand = (receiverAccountId: AccountId, amount: InstrumentAmount, repayAmount: InstrumentAmount, funder: AlgorandSigner) => Promise<DepositResult>
+type DepositFundsWormhole = (receiverAccountId: AccountId, amount: InstrumentAmount, repayAmount: InstrumentAmount, funder: WormholeSigner, originChain: ChainName) => Promise<WormholeDepositResult>
 
 interface DepositOverrides {
     note?: string
@@ -47,7 +51,7 @@ type SubmitWormholeVAA = (receiverAccountId: AccountId, amount: InstrumentAmount
 
 type WithdrawResult = DepositResult
 interface WormholeWithdrawResult extends WithdrawResult {
-    isTransferCompleted: (provider?: Signer | providers.Provider) => Promise<boolean>
+    isTransferCompleted: (provider?: Signer | providers.Provider | Connection) => Promise<boolean>
     getVAASequence: () => Promise<string>
     waitForWormholeVAA: (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => Promise<Uint8Array>
     redeemWormholeVAA: (signer?: Signer, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => Promise<ContractReceipt>
@@ -80,6 +84,7 @@ interface MarketOrder extends BaseOrder {
 type Order = LimitOrder | MarketOrder
 
 export type {
+    WormholeSigner,
     DepositResult,
     WormholeDepositResult,
     DepositFundsAlgorand,

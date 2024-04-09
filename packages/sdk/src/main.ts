@@ -42,6 +42,8 @@ export type {
     CCTPChain,
     BigIntRate,
     Delegation,
+    UnixTimestampInSeconds,
+    InstrumentPrices,
 } from "@c3exchange/common"
 export type {
     MarketInfo,
@@ -68,24 +70,36 @@ export {
     CHAIN_ID_ALGORAND,
     CHAIN_ID_AVAX,
     CHAIN_ID_SOLANA,
+    CHAIN_ID_ARBITRUM,
+    CHAIN_ID_ARBITRUM_SEPOLIA,
+    CHAIN_ID_BSC,
+    CHAIN_ID_SEPOLIA,
     parseJSON,
     stringifyJSON,
-    createGTDExpiration,
+    defaultOrderExpiration,
+    maxOrderExpiration,
+    createExpiration,
     TAKER_FEES,
     MessageSigner,
     AlgorandSigner,
     EVMSigner,
+    SolanaSigner,
+    SolanaSignTxCallback,
     SUPPORTED_CHAIN_IDS,
     CHAIN_UTILS,
     isChainIdSupported,
+    toSupportedChainId,
     isEVMChain,
     assertChain,
     assertEVMChain,
     AccountSide,
-    validateEthereumVaa,
+    validateVaa,
     AlgorandChainName,
     EthereumChainName,
     AvalancheChainName,
+    ArbitrumChainName,
+    ArbitrumSepoliaChainName,
+    SepoliaChainName,
     UnixClock,
     SECONDS_IN_DAY,
     createMarket,
@@ -99,14 +113,12 @@ export {
     InstrumentAmountMap,
     WormholeService,
     availableForTradePriceAdjusted,
-    SUPPORTED_CCTP_CHAINS,
+    SUPPORTED_MAINNET_CCTP_CHAINS,
+    SUPPORTED_TESTNET_CCTP_CHAINS,
+    SUPPORTED_CHAIN_NAMES,
+    getEvmGasLimitByChain,
 } from "@c3exchange/common"
-export {
-    C3SDK,
-    asWormholeDepositResult,
-    getWormholeDepositInfo,
-    asWormholeWithdrawResult
-} from "./c3sdk"
+export * from "./c3sdk"
 export * from "./internal/helpers/price"
 export * from "./internal/helpers/order"
 export * from "./internal/helpers/operation"
@@ -144,7 +156,7 @@ export {
 export {
     SocketId,
     WebSocketMessages,
-    WebSocketRequests,
+    RequestMessage,
     SnapshotMessage,
     OpenOrderMessage,
     TradeMessage,

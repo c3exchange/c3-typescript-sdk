@@ -1,22 +1,29 @@
 import "mocha"
 import { expect } from "chai"
-import { generateMockedLogin, mockedServer } from "../helpers/mock.responses"
+import { cleanMockedServer, generateMockedLogin, mockCommonEndpoints, mockedServer } from "../helpers/mock.responses"
 import Market from "../../../src/entities/markets"
 import { defaultConfig } from "../../../src/config"
 import AccountClient from "../../../src/entities/account"
 import { C3SDK, C3SDKConfig } from "../../../src"
-import { ALGO_INSTRUMENT, AlgorandSigner, CHAIN_ID_ALGORAND, CHAIN_ID_ETH, InstrumentAmount, Signer, encodeBase64 } from "@c3exchange/common"
-import { ALGORAND_ACCOUNT, ALGORAND_ACCOUNT_ID } from "../helpers/mock.resources"
+import { ALGO_INSTRUMENT, AlgorandSigner, CHAIN_ID_ALGORAND, CHAIN_ID_ETH, EVMSigner, InstrumentAmount, Signer, encodeBase64 } from "@c3exchange/common"
+import { ALGORAND_ACCOUNT, ALGORAND_ACCOUNT_ID, ALGORAND_MNEMONIC, ETHEREUM_ACCOUNT, ETHEREUM_ACCOUNT_ID } from "../helpers/mock.resources"
 import algosdk from "algosdk"
 
 describe ("C3Sdk tests", () => {
     const sdk = new C3SDK()
+
+    beforeEach(() => {
+        cleanMockedServer()
+        mockCommonEndpoints()
+    })
+
     it("Should instantiate the class without arguments", () => {
-        // @ts-expect-error
+        // @ts-expect-error Accessing private attribute
         expect(sdk.config).to.be.deep.equal(defaultConfig)
     })
     it("Should instantiate the class with config arguments", async () => {
         const config: C3SDKConfig = {
+            solana_cluster: "http://localhost:8899",
             algorand_node: {
                 server: "http://localhost",
                 port: 4001,
@@ -28,7 +35,7 @@ describe ("C3Sdk tests", () => {
             }
         }
         const newSdk = new C3SDK(config)
-        // @ts-expect-error
+        // @ts-expect-error Accessing private attribute
         expect(newSdk.config).to.be.deep.equal(config)
     })
     it("Should have markets attribute", () => {
@@ -76,11 +83,32 @@ describe ("C3Sdk tests", () => {
         }
     })
 
+    it ("Should work loginStart", async () => {
+        const signer = new EVMSigner(ETHEREUM_ACCOUNT.address, CHAIN_ID_ETH, ETHEREUM_ACCOUNT)
+        const nonceFromServer = "Hello World!!"
+        mockedServer.get("/v1/login/start").query({ address: signer.address, chainId: signer.chainId }).reply(200, { nonce: nonceFromServer });
+        // @ts-expect-error Accessing private method
+        const signedNonce = await sdk._startLoginOperation(signer)
+        expect(signedNonce).to.be.equal("Ughh5sXeak6k1OmSQNuDiEVCWJlrImUHy+N0cRGYrHVyWNNmBkHKu60dAxnrUKtTNeeEIUd+iIaf3CUGNpTm4Rs=")
+    })
+
+    it ("Should work loginComplete", async () => {
+        const signer = new EVMSigner(ETHEREUM_ACCOUNT.address, CHAIN_ID_ETH, ETHEREUM_ACCOUNT)
+        const signature = "vQLFjZRmSeewcUlowdx28eJh/Q7pvPGiBqD87QpLu7VmAB5hEqMbtT1wDgyR7sMCy5Kt5dMnKTxtab2hvmb+phs="
+        const bodyResponse = { token: "jwt token 2", userId: ETHEREUM_ACCOUNT_ID, accountId: ETHEREUM_ACCOUNT_ID, firstLogin: true }
+        mockedServer.post("/v1/login/complete", { address: signer.address, chainId: signer.chainId, signature })
+        .matchHeader("web-mode", "true")
+        .reply(200, bodyResponse);
+        // @ts-expect-error Accessing private method
+        const response = await sdk._completeLoginOperation(signer, signature, true)
+        expect(response).to.be.deep.equal(bodyResponse)
+    })
+
     it ("Should sign nonce", async () => {
         const nonce = "Hello world"
         const signer = new Signer().addFromSecretKey(ALGORAND_ACCOUNT.sk)
-        // @ts-expect-error
-        const signature = await sdk.signNonce(nonce, signer)
+        // @ts-expect-error Accessing private method
+        const signature = await sdk._signLoginNonce(nonce, signer)
         const expectedSignature = encodeBase64(algosdk.signBytes(Buffer.from(nonce, "ascii"), ALGORAND_ACCOUNT.sk))
         expect(signature).to.be.equal(expectedSignature)
     })

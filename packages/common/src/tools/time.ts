@@ -11,9 +11,14 @@ export interface IClockWithRelativeTime extends IClock{
     getRelativeTimestamp(): RelativeTimestamp
 }
 
+
 export const MILISECONDS_IN_SECOND = 1000
 export const SECONDS_IN_DAY = 60 * 60 * 24
-export const SECONDS_IN_YEAR = SECONDS_IN_DAY * 365
+
+export const MIN_ORDER_EXPIRY_IN_SECONDS: UnixTimestampInSeconds = 60
+export const DEFAULT_ORDER_EXPIRY_IN_SECONDS: UnixTimestampInSeconds = SECONDS_IN_DAY * 90
+export const MAX_ORDER_EXPIRY_IN_SECONDS: UnixTimestampInSeconds = SECONDS_IN_DAY * 180
+
 export class UnixClock implements IClock {
     public nowMilis(): UnixTimestampInMiliseconds {
         return Date.now()
@@ -51,12 +56,14 @@ export class FixedClock extends UnixClockWithRelativeTimestamp {
     }
 }
 
-export const createGTDExpiration = (clock: IClock = new UnixClock()): UnixTimestampInSeconds => {
-    // 1 day
-    return clock.nowSeconds() + SECONDS_IN_DAY
+export const createExpiration = (seconds: UnixTimestampInSeconds, clock: IClock = new UnixClock()): UnixTimestampInSeconds => {
+    return clock.nowSeconds() + seconds
 }
 
-export const createGTCExpiration = (clock: IClock = new UnixClock()): UnixTimestampInSeconds => {
-    // 1 year
-    return clock.nowSeconds() + SECONDS_IN_YEAR
+export const defaultOrderExpiration = (clock: IClock = new UnixClock()): UnixTimestampInSeconds => {
+    return clock.nowSeconds() + DEFAULT_ORDER_EXPIRY_IN_SECONDS
+}
+
+export const maxOrderExpiration = (clock: IClock = new UnixClock()): UnixTimestampInSeconds => {
+    return clock.nowSeconds() + MAX_ORDER_EXPIRY_IN_SECONDS
 }

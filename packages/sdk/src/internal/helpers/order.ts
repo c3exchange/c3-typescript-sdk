@@ -32,6 +32,7 @@ const convertNewOrderData = (order: AccountOrderResponse, market: Market): NewOr
 
 const toMarketTrade = (trade: MarketTradeResponse, market: Market): MarketTrade => {
   const convertedTrade: MarketTrade = {
+    fillId: trade.fillId,
     marketId: trade.marketId,
     buyOrderId: trade.buyOrderId,
     sellOrderId: trade.sellOrderId,
@@ -41,6 +42,10 @@ const toMarketTrade = (trade: MarketTradeResponse, market: Market): MarketTrade 
     tradeQuoteAmount: InstrumentAmount.fromDecimal(market.quoteInstrument, trade.tradeQuoteAmount),
     tradeBuyFees: InstrumentAmount.fromDecimal(market.quoteInstrument, trade.tradeBuyFees),
     tradeSellFees: InstrumentAmount.fromDecimal(market.quoteInstrument, trade.tradeSellFees),
+    tradeBuyBorrow: InstrumentAmount.fromDecimal(market.quoteInstrument, trade.tradeBuyBorrow),
+    tradeBuyRepay: InstrumentAmount.fromDecimal(market.baseInstrument, trade.tradeBuyRepay),
+    tradeSellBorrow: InstrumentAmount.fromDecimal(market.baseInstrument, trade.tradeSellBorrow),
+    tradeSellRepay: InstrumentAmount.fromDecimal(market.quoteInstrument, trade.tradeSellRepay),
     buyOrderCompleted: trade.buyOrderCompleted,
     sellOrderCompleted: trade.sellOrderCompleted,
     buyOrderIsTaker: trade.buyOrderIsTaker,

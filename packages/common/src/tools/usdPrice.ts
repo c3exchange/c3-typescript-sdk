@@ -5,6 +5,7 @@ import { AssetId } from "../interfaces"
 
 export type UsdAmount = BigNumber
 export type PicoUsdAmount = bigint
+export type MiliUsdAmount = bigint
 
 export const PICO_USD_EXPONENT = 12
 

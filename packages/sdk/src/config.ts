@@ -10,6 +10,7 @@ export interface AlgorandUrlConfig extends UrlConfig {
 }
 
 export interface C3SDKConfig {
+    solana_cluster: string
     algorand_node: AlgorandUrlConfig
     c3_api: UrlConfig & {
         wormhole_network: WormholeNetwork
@@ -17,8 +18,9 @@ export interface C3SDKConfig {
 }
 
 export const defaultConfig: C3SDKConfig = {
+    solana_cluster: "https://swr.xnftdata.com/rpc-proxy/",
     algorand_node: {
-        server: "https://node.algoexplorerapi.io"
+        server: "https://algolite.c3.io"
     },
     c3_api: {
         server: "https://api.c3.io",

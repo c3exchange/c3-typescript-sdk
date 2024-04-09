@@ -1,20 +1,26 @@
 import { AppId, AssetId, Instrument } from "../interfaces";
-import { ChainId, ChainName, WormholeEnvironment, WormholeNetwork, XAddress, XAssetId, XContractAddress } from "./types";
-import { AlgorandChainName, CHAIN_ID_AVAX, createWrappedAssetMap, toChainId, toChainName } from "./constants"
+import { ChainId, ChainName, WormholeEnvironment, WormholeNetwork, XAssetId, XContractAddress } from "./types";
+import { AlgorandChainName, CHAIN_ID_AVAX, WrappedAssetMap, createWrappedAssetMap, toChainId, toChainName } from "./constants"
 
-export const SUPPORTED_CCTP_CHAINS = [
-    // 'arbitrum',
+export const SUPPORTED_MAINNET_CCTP_CHAINS = [
+    'arbitrum',
     'ethereum',
     // 'optimism',
     // We should receive USDC AVAX via Wormhole bridge.
     'avalanche',
 ] as const
-export type CCTPChain = typeof SUPPORTED_CCTP_CHAINS[number]
+
+export const SUPPORTED_TESTNET_CCTP_CHAINS = [
+    ...SUPPORTED_MAINNET_CCTP_CHAINS,
+    'sepolia'
+] as const
+
+export type CCTPChain = typeof SUPPORTED_TESTNET_CCTP_CHAINS[number]
 
 export class WormholeDictionary {
     private tokenBridgeAppId: bigint
     private coreAppId: bigint
-    private readonly wNatives: Map<ChainName, XContractAddress>
+    private readonly wNatives: WrappedAssetMap
 
     constructor(private wormholeEnvironment: WormholeEnvironment) {
         this.wNatives = createWrappedAssetMap(this.wormholeEnvironment.WormholeNetwork)
@@ -84,6 +90,11 @@ export class WormholeDictionary {
                     messageTransmitter: "0x4d41f22c5a0e5c74090899e5a8fb597a8842b3e8",
                     tokenMinter: "0x33E76C5C31cb928dc6FE6487AB3b2C0769B1A1e3",
                     tokenMessenger: "0x2B4069517957735bE00ceE0fadAE88a26365528f"
+                },
+                sepolia: {
+                    messageTransmitter: "0xcafecafecafecafecafecafecafecafecafecafe",
+                    tokenMinter: "0xcafecafecafecafecafecafecafecafecafecafe",
+                    tokenMessenger: "0xcafecafecafecafecafecafecafecafecafecafe"
                 }
             },
             TESTNET: {
@@ -106,6 +117,11 @@ export class WormholeDictionary {
                     messageTransmitter: "0x9ff9a4da6f2157a9c82ce756f8fd7e0d75be8895",
                     tokenMinter: "0x162580c71df51638df454e9ad75f11d184ff867b",
                     tokenMessenger: "0x23a04d5935ed8bc8e3eb78db3541f0abfb001c6e"
+                },
+                sepolia: {
+                    messageTransmitter: "0x7865fAfC2db2093669d92c0F33AeEF291086BEFD",
+                    tokenMinter: "0xE997d7d2F6E065a9A93Fa2175E878Fb9081F1f0A",
+                    tokenMessenger: "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
                 }
             },
             DEVNET: {
@@ -126,6 +142,11 @@ export class WormholeDictionary {
                 },
                 optimism: {
                     messageTransmitter: "0x0000000000000000000000000000000000000000",
+                    tokenMinter: "0x0000000000000000000000000000000000000000",
+                    tokenMessenger: "0x0000000000000000000000000000000000000000"
+                },
+                sepolia: {
+                    messageTransmitter:  "0x0000000000000000000000000000000000000000",
                     tokenMinter: "0x0000000000000000000000000000000000000000",
                     tokenMessenger: "0x0000000000000000000000000000000000000000"
                 }
@@ -149,6 +170,7 @@ export class WormholeDictionary {
                 avalanche: { cctp: "0x09Fb06A271faFf70A651047395AaEb6265265F13" },
                 ethereum: { cctp: "0xAaDA05BD399372f0b0463744C09113c137636f6a" },
                 optimism: { cctp: "0x2703483B1a5a7c577e8680de9Df8Be03c6f30e3c" },
+                sepolia: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" }
             },
 
             TESTNET: {
@@ -156,6 +178,7 @@ export class WormholeDictionary {
                 avalanche: { cctp: "0x58f4c17449c90665891c42e14d34aae7a26a472e" },
                 ethereum: { cctp: "0x0a69146716b3a21622287efa1607424c663069a4" },
                 optimism: { cctp: "0x2703483b1a5a7c577e8680de9df8be03c6f30e3c" },
+                sepolia: { cctp: "0x2703483B1a5a7c577e8680de9Df8Be03c6f30e3c" }
             },
 
             // Those are bugs addresses!
@@ -164,6 +187,7 @@ export class WormholeDictionary {
                 avalanche: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
                 ethereum: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
                 optimism: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
+                sepolia: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" }
             }
         }
 
@@ -185,20 +209,23 @@ export class WormholeDictionary {
             MAINNET: {
                 ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
                 avalanche: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
-                // arbitrum: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-                // optimism: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
+                arbitrum: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+                // optimism: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                sepolia: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe"
             },
             TESTNET: {
                 ethereum: "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
                 avalanche: "0x5425890298aed601595a70AB815c96711a31Bc65",
-                // arbitrum: "0xF175520C52418dfE19C8098071a252da48Cd1C19",
+                arbitrum: "0xF175520C52418dfE19C8098071a252da48Cd1C19",
                 // optimism: "0xe05606174bac4A6364B31bd0eCA4bf4dD368f8C6"
+                sepolia: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
             },
             DEVNET: {
                 ethereum: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
                 avalanche: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
-                // arbitrum: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
+                arbitrum: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
                 // optimism: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe"
+                sepolia: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
             }
         }
 
@@ -211,7 +238,7 @@ export class WormholeDictionary {
     }
 
     public getCCTPAvailableChains(): CCTPChain[] {
-        return [...SUPPORTED_CCTP_CHAINS];
+        return this.wormholeEnvironment.WormholeNetwork === "TESTNET" ? [...SUPPORTED_TESTNET_CCTP_CHAINS] : [...SUPPORTED_MAINNET_CCTP_CHAINS];
     }
 
     public isValidCCTPChain(chain: ChainName): chain is CCTPChain {
@@ -228,8 +255,8 @@ export class WormholeDictionary {
     }
 
     public isWrappedCurrency(asset: XAssetId) {
-        const wrappedEthAddress = this.getWrappedNativeCurrencyAddress(asset.chain);
-        return asset.tokenAddress.toLowerCase() === wrappedEthAddress.tokenAddress.toLowerCase();
+        const wrappedNativeTokenAddress = this.getWrappedNativeCurrencyAddress(asset.chain);
+        return asset.tokenAddress.toLowerCase() === wrappedNativeTokenAddress.tokenAddress.toLowerCase();
     }
 
     public isWormholeAppId(appId: AppId): boolean {
@@ -238,7 +265,8 @@ export class WormholeDictionary {
     }
 
     public getWrappedNativeCurrencyAddress(evmChain: ChainName): XContractAddress {
-        const native: XContractAddress | undefined = this.wNatives.get(evmChain) as XContractAddress;
+        // @ts-expect-error
+        const native: XContractAddress | undefined = this.wNatives[evmChain] as XContractAddress;
         if (native === undefined)
             throw new Error("Unsupported chain/network");
         return native;

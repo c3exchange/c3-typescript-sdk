@@ -11,11 +11,12 @@ import {
     OperationStatus,
     AccountOperationType,
     NewOrderDataRequest,
+    EphemeralSession,
 } from "../interfaces"
 import { isChainId, ChainId, ChainName, isChainName } from "../wormhole"
-import { isValidAddress } from "../chains"
 import BigNumber from "bignumber.js"
 import { isValidAccountId } from "../utils"
+import { isValidAddress } from "../chains"
 
 // characters allowed in string: A-Z, a-z, 0-9, space, \r, \n,
 const safeStringSchema = Z.string().regex(/^[^()><\-+?]+$/,"String contains invalid characters")
@@ -103,13 +104,14 @@ function parsePriceString (value: any, defaultValue?: string, optional?: boolean
     return (optional ? regexParser.optional() : regexParser).parse(valueToParse)
 }
 
-const parseUserAddressSchema = Z.string().refine((x) => isValidAddress(x))
+const parseUserAddressSchema = Z.string()
+const parseUserAddressSchemaWithValidation = parseUserAddressSchema.refine((x) => isValidAddress(x))
 function parseUserAddress (value: any, defaultValue?: string): string
-function parseUserAddress (value: any, defaultValue: string, optional?: boolean): string
-function parseUserAddress (value: any, defaultValue?: string, optional?: boolean): string|undefined
-function parseUserAddress (value: any, defaultValue?: string, optional?: boolean): string|undefined {
+function parseUserAddress (value: any, defaultValue: string, optional?: boolean, includeValidation?:boolean): string
+function parseUserAddress (value: any, defaultValue?: string, optional?: boolean, includeValidation?:boolean): string|undefined
+function parseUserAddress (value: any, defaultValue?: string, optional?: boolean, includeValidation?:boolean): string|undefined {
     const valueToParser = value ?? defaultValue
-    const addressParser = parseUserAddressSchema
+    const addressParser = includeValidation ? parseUserAddressSchemaWithValidation : parseUserAddressSchema
     return (optional ? addressParser.optional() : addressParser).parse(valueToParser)
 }
 
@@ -117,11 +119,15 @@ function parseGranularityName (value: any, defaultValue?: GranularityResolution)
     return Z.nativeEnum(GranularityResolution).parse(value ?? defaultValue)
 }
 
+const chainIdParser = Z.number().int().positive().refine(isChainId)
 function parseChainId (value: any, defaultValue?: ChainId): ChainId
 function parseChainId (value: any, defaultValue?: ChainId, optional?: boolean): ChainId | undefined
 function parseChainId (value: any, defaultValue?: ChainId, optional?: boolean): ChainId | undefined {
-    const chainIdParser = Z.number().int().positive().refine(isChainId)
-    return (optional ? chainIdParser.optional() : chainIdParser).parse(value ?? defaultValue) as ChainId
+    try {
+        return (optional ? chainIdParser.optional() : chainIdParser).parse(value !== undefined ? Number(value) : defaultValue) as ChainId
+    } catch (error) {
+        throw new Error(`Invalid chain id: ${value}. Error: ` + error)
+    }
 }
 
 function parseChainName (value: any, defaultValue?: ChainName): ChainName
@@ -182,6 +188,14 @@ const parseNewOrdersRequest = (newOrdersRequest: any, accountId: AccountId): New
         }})
 }
 
+const parseEphemeralSession = (session: EphemeralSession | undefined) => {
+    return Z.object({
+        address: parseUserAddressSchema,
+        expiresOn: positiveIntegerSchema,
+        signature: base64Schema,
+    }).optional().parse(session)
+}
+
 export { ZodError } from "zod"
 
 export {
@@ -208,4 +222,5 @@ export {
     parseAccountOperationTypeArray,
     parseNewOrdersRequest,
     parseDelegationId,
+    parseEphemeralSession,
 }

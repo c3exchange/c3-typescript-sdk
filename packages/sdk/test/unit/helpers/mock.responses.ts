@@ -7,9 +7,15 @@ import { toMarketInfoResponse } from "./mock.methods";
 const baseUrl = getTestBaseUrl()
 const mockedServer = nock(baseUrl)
 
-// Instruments and Markets are persisted because they are used in multiple tests and they are not modified
-mockedServer.get("/v1/instruments").reply(200, instruments).persist()
-mockedServer.get("/v1/markets").reply(200, marketInfos.map(toMarketInfoResponse)).persist()
+function mockCommonEndpoints() {
+    // Instruments and Markets are persisted because they are used in multiple tests and they are not modified
+    mockedServer.get("/v1/instruments").reply(200, instruments).persist()
+    mockedServer.get("/v1/markets").reply(200, marketInfos.map(toMarketInfoResponse)).persist()
+}
+
+function cleanMockedServer() {
+    nock.cleanAll()
+}
 
 function generateMockedLogin (chainId: SupportedChainId) {
     let address: UserAddress, signature: Base64, accountId: AccountId, signer: MessageSigner
@@ -44,5 +50,7 @@ function generateMockedLogin (chainId: SupportedChainId) {
 
 export {
     mockedServer,
+    mockCommonEndpoints,
+    cleanMockedServer,
     generateMockedLogin,
 }

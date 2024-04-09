@@ -3,8 +3,10 @@ import { ContractAmount, InstrumentAmount, NetUserPosition } from "./instrumentA
 import { PicoUsdAmount } from "./usdPrice"
 import { BigMin, BigMax, bigintMax, bigintMin } from "./math"
 import { MarketPrice } from "./marketPrices"
-import { RATIO_ONE } from "./percentageAmount"
+import { RATIO_ONE, PercentageAmount } from "./percentageAmount"
 import BigNumber from "bignumber.js"
+import { stringifyJSON } from "../utils/index"
+import { OrderSide } from "../interfaces"
 
 
 // All risk parameters are multiplied by a scale factor of 1000 to make them integer
@@ -123,9 +125,30 @@ function offsetAdjustment(riskFactors: RiskParameters, price: PicoUsdAmount, amo
     return (price * amount * (riskFactors.margin.toDB() + riskFactors.haircut.toDB()) / RATIO_ONE)
 }
 
+const createLogIfPrefix = (prefix: string | undefined) => {
+    return (msg: any, ...params: any[]) => {
+        if(prefix !== undefined){
+            console.log(`[${prefix}]-`, msg, params)
+        }
+    }
+}
+export function calculateMarketOrderSlippage(orderSide: OrderSide, orderPrice: MarketPrice, priceTick: MarketPrice, minPrice?: MarketPrice, maxPrice?: MarketPrice, prefix: string | undefined = undefined ): MarketPrice {
+    const logIfPrefix = createLogIfPrefix(prefix)
+    const slippageFactor = PercentageAmount.fromDecimal('0.5')
+    const slippageAmount =  slippageFactor.applyToPrice(orderPrice)
+    let priceWithSlippage = orderSide === 'buy' ? orderPrice.add(slippageAmount).nextMultiple(priceTick) : orderPrice.sub(slippageAmount).prevMultiple(priceTick)
+    // If 50% slippage is too much consider worst market price in the book
+    const result =  orderSide === 'buy' ? priceWithSlippage.min(maxPrice ?? priceWithSlippage) : priceWithSlippage.max(minPrice ?? priceWithSlippage)
+    logIfPrefix("orderPrice", orderPrice, 'priceTick', priceTick, 'slippageAmount', slippageAmount, 'priceWithSlippage', priceWithSlippage, 'result', result)
+    return result
+}
 
+export function availableForTradePriceAdjusted(sellInfo: InstrumentWithRiskParameters, buyInfo: InstrumentWithRiskParameters, marginCalculation: Margin, orderPrice: MarketPrice , userPosition: NetUserPosition, prefix: string | undefined = undefined ): InstrumentAmount {
 
-export function availableForTradePriceAdjusted(sellInfo: InstrumentWithRiskParameters, buyInfo: InstrumentWithRiskParameters, marginCalculation: Margin, orderPrice: MarketPrice , userPosition: NetUserPosition ): InstrumentAmount {
+    const logIfPrefix = createLogIfPrefix(prefix)
+    const printPicoAmount = (picoPrice: BigInt) => {
+        return `${BigNumber(picoPrice.toString()).shiftedBy(-12).toNumber()} x 10e12`
+    }
     const sellInstrument = sellInfo as Instrument
     const buyInstrument = buyInfo as Instrument
     const sellRiskParams = sellInfo.riskParameters.initial
@@ -151,57 +174,78 @@ export function availableForTradePriceAdjusted(sellInfo: InstrumentWithRiskParam
     const ONE_PICO_USD = BigInt(10**12)
     const sellInPicoUsd =  BigInt(BigNumber(sellPrice.toString()).shiftedBy(sellInstrument.asaDecimals).toFixed(0)) // PicoUSD per Sell Instrument
     const buyInPicoUsd =  BigInt(BigNumber(buyPrice.toString()).shiftedBy(buyInstrument.asaDecimals).toFixed(0)) // PicoUSD per Sell Instrument
-
-
     const sellInstrumentBalance = getInstrumentMarginDetails(sellInfo, marginCalculation, userPosition)
+    logIfPrefix("buyInstrument", buyInfo)
+    logIfPrefix("sellInstrument", sellInfo)
+    logIfPrefix("marginCalculation", marginCalculation)
     const me = marginCalculation.support - marginCalculation.requirement
+    logIfPrefix("Margin [pUSD] = ", printPicoAmount(me))
     if(me < 0n){
-      // If getting an asset with less risk allow to spend what you have
+        // If getting an asset with less risk allow to spend what you have
         if(buyHaircut.raw <= sellHaircut.raw){
             return InstrumentAmount.fromContract(sellInstrument, sellInstrumentBalance.availableCash )
         }else {
             return InstrumentAmount.zero(sellInstrument)
         }
     }
-    const adjustedLend = sellHaircutRemainder.toDB() * sellInfo.riskParameters.optUtilization.toDB()* sellInstrumentBalance.lend   / (RATIO_ONE * RATIO_ONE)
-    const sellContractAmountShift = BigInt(10 ** sellInstrument.asaDecimals)
-    const marginInSellContractAmount = (marginCalculation.support - marginCalculation.requirement) * sellContractAmountShift /  sellInPicoUsd
-    const adjustedMargin = marginInSellContractAmount + adjustedLend
-
-    // We Adjust the price of the order price to the buy / sell instrument relation
+    logIfPrefix(`${sellInfo.id} [pUSD]`, printPicoAmount(sellInPicoUsd))
+    logIfPrefix(`${buyInfo.id} [pUSD]`, printPicoAmount(buyInPicoUsd))
+    const implicitMktPrice = buyInPicoUsd * ONE_PICO_USD / sellInPicoUsd
+    logIfPrefix(`implicitMktPrice [${buyInfo.id} / ${sellInfo.id}] = buyInPicoUsd * ONE_PICO_USD / sellInPicoUsd`, printPicoAmount(implicitMktPrice))
     let { numerator: orderPriceNum,denominator: orderPriceDen} = orderPrice.asFraction()
     if(orderPrice.market.baseInstrument.id === sellInstrument.id){
         const aux = orderPriceNum
         orderPriceNum = orderPriceDen
         orderPriceDen = aux
     }
-    const priceAux = (buyInPicoUsd * orderPriceDen * ONE_PICO_USD ) / (sellInPicoUsd * orderPriceNum)
-    const priceFactorX = sellHaircutRemainder.toDB()*ONE_PICO_USD - buyHaircutRemainder.toDB() * priceAux
+    logIfPrefix(`orderPrice [${buyInfo.id} / ${sellInfo.id}]: ${BigNumber(orderPriceNum.toString()).div(orderPriceDen.toString()).toNumber()} , orderPriceNum: ${orderPriceNum}, orderPriceDen: ${orderPriceDen}`)
+    const priceAux = implicitMktPrice * orderPriceDen  / orderPriceNum
+    logIfPrefix("priceAux: implicitMktPrice / orderPrice", printPicoAmount(priceAux))
+    logIfPrefix(`sellInstrumentBalance ${stringifyJSON(sellInstrumentBalance,true)}`)
+    const adjustedLend = sellHaircutRemainder.toDB() * sellInfo.riskParameters.optUtilization.toDB()* sellInstrumentBalance.lend   / (RATIO_ONE * RATIO_ONE)
+    const sellContractAmountShift = BigInt(10 ** sellInstrument.asaDecimals)
+    const marginInSellContractAmount = (marginCalculation.support - marginCalculation.requirement) * sellContractAmountShift /  sellInPicoUsd
+    const adjustedMargin = marginInSellContractAmount + adjustedLend
+    logIfPrefix("adjustedMargin [sellPicoUnits] = marginInSellContractAmount + adjustedLend", InstrumentAmount.fromContract(sellInstrument, adjustedMargin).toString())
+    // We Adjust the price of the order price to the buy / sell instrument relation
     const netSellPositionAfterRedeem = bigintMax(BigInt(0),sellInstrumentBalance.availableCash - sellInstrumentBalance.liability ) + sellInstrumentBalance.lend
+    logIfPrefix("netSellPositionAfterRedeem: lend[sell] + Max{ 0, avaliableCash[sell] - liability[sell]}", InstrumentAmount.fromContract(sellInstrument, netSellPositionAfterRedeem).toString())
+    const priceFactorX = sellHaircutRemainder.toDB()*ONE_PICO_USD - buyHaircutRemainder.toDB() * priceAux
+    logIfPrefix('priceFactorX: (1- haircut_sell)*ONE_PICO_USD - (1 - haircut_buy) * priceAux', printPicoAmount(priceFactorX) )
     const x = priceFactorX !== BigInt(0) ? adjustedMargin * RATIO_ONE * ONE_PICO_USD / priceFactorX : BigInt(0) //
+    logIfPrefix("x = adjustedMargin * RATIO_ONE * ONE_PICO_USD / priceFactorX = ", InstrumentAmount.fromContract(sellInstrument,x).toString())
     let buyingPower = netSellPositionAfterRedeem
-    if( x > BigInt(0) && x < netSellPositionAfterRedeem ){
+    if ( x > BigInt(0) && x < netSellPositionAfterRedeem ) {
         buyingPower = x
-    }
-    else
-    {
+    } else {
         const haircuttedAvailableCashSell = sellHaircutRemainder.toDB()*netSellPositionAfterRedeem
         const priceAdjustedNetPosition = buyHaircutRemainder.toDB() *netSellPositionAfterRedeem * priceAux
         const priceFactorY = sellMarginExcess.toDB()*ONE_PICO_USD - buyHaircutRemainder.toDB() * priceAux
-        let y =  ( adjustedMargin* RATIO_ONE*ONE_PICO_USD - haircuttedAvailableCashSell*ONE_PICO_USD + priceAdjustedNetPosition  ) / bigintMax(priceFactorY,BigInt(1))
-        const buyInstrumentBalance = getInstrumentMarginDetails(buyInfo, marginCalculation, userPosition)
-        // we are going to close some existing liability
-        //let netBuyLiability = buyInstrumentBalance.liability - buyInstrumentBalance.cashBalance
+        if(priceFactorY <= 1n){
+            return InstrumentAmount.infinity(sellInstrument)
+        }
+        let y = ( adjustedMargin * RATIO_ONE * ONE_PICO_USD - haircuttedAvailableCashSell * ONE_PICO_USD + priceAdjustedNetPosition  )
+        y = y / priceFactorY
+        logIfPrefix("yNum = ( adjustedMargin * RATIO_ONE * ONE_PICO_USD - haircuttedAvailableCashSell * ONE_PICO_USD + priceAdjustedNetPosition  )", printPicoAmount(adjustedMargin * RATIO_ONE * ONE_PICO_USD), ' - ' , printPicoAmount(haircuttedAvailableCashSell * ONE_PICO_USD), ' + ', printPicoAmount(priceAdjustedNetPosition)  )
+        logIfPrefix("priceFactorY = sellMarginExcess x10e12 - buyHaircutRemainder * priceAux = ", printPicoAmount(sellMarginExcess.toDB()*ONE_PICO_USD ), ' - ',  printPicoAmount( buyHaircutRemainder.toDB() *  priceAux) )
+        logIfPrefix("y_beforeDelta = yNum / priceFactorY", InstrumentAmount.fromContract(sellInstrument,y).toString())
         let buyUnoffsetLiability = marginCalculation.unoffsetLiabilities.get(buyInstrument.asaId) ?? BigInt(0)
         if(buyInfo.asaDecimals != sellInfo.asaDecimals){
             // mode decimal point on buyUnoffsetLiability to match y instrument (sell)
             buyUnoffsetLiability = BigInt(BigNumber(buyUnoffsetLiability.toString()).shiftedBy(sellInfo.asaDecimals - buyInfo.asaDecimals).toFixed(0))
         }
-        const offsetBuy = bigintMin( (y + netSellPositionAfterRedeem)*orderPriceDen / orderPriceNum ,buyUnoffsetLiability)
+        logIfPrefix("buyUnoffsetLiability [in sell units] = ", buyUnoffsetLiability)
+        const offsetBuy = bigintMin( (y + netSellPositionAfterRedeem)*orderPriceDen / orderPriceNum, buyUnoffsetLiability)
+        logIfPrefix("offsetBuy = min{ (y_before_delta + netSellPositionAfterRedeem)*orderPriceDen / orderPriceNum, buyUnoffsetLiability} = ", offsetBuy)
         const offsetAdj = offsetBuy*( buyHaircut.toDB() + buyMargin.toDB())
-        const deltaY = (offsetAdj* buyInPicoUsd * ONE_PICO_USD) / sellInPicoUsd
-        y = y + deltaY / priceFactorY
-        buyingPower = netSellPositionAfterRedeem  +  y
+        logIfPrefix("offsetAdj = offsetBuy * ( haircut[buy] + margin[buy]) = ", offsetAdj)
+        const deltaYNum = (offsetAdj* buyInPicoUsd * ONE_PICO_USD) / sellInPicoUsd
+        logIfPrefix("deltaYNum = (offsetAdj* buyInPicoUsd * ONE_PICO_USD) / sellInPicoUsd = ", printPicoAmount(deltaYNum))
+        const deltaY = deltaYNum / priceFactorY
+        logIfPrefix('deltaY = deltaYNum / priceFactorY ', InstrumentAmount.fromContract(sellInstrument, deltaY).toString() )
+        y = y + deltaY
+        logIfPrefix("y = y_beforeDelta + deltaY", InstrumentAmount.fromContract(sellInstrument,y).toString())
+        buyingPower = BigMax(0n, netSellPositionAfterRedeem + y)
     }
     return InstrumentAmount.fromContract(sellInstrument,buyingPower)
 }

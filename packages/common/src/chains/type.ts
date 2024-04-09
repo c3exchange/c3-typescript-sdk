@@ -9,7 +9,9 @@ interface ChainTools {
     getDataPrefix: ((dataLength: number) => Uint8Array)
     getXAddress: (address: UserAddress) => XAddress
     getXContractAddress: (tokenAddress: string) => XContractAddress
-    isValidAddress: (address: UserAddress) => boolean,
+    isValidAddress: (address: UserAddress) => boolean
+    // Validates if the address is valid and perform any required change to align the address the the required chain format
+    toValidAddress: (address: string) => UserAddress
     verifySignature: (signature: Signature | RawSignature, data: Uint8Array | Base64, address: UserAddress) => boolean
     isValidTxHash: (txHash: string) => boolean
 }

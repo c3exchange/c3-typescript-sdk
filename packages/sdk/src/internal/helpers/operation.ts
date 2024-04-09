@@ -1,4 +1,4 @@
-import { AccountId, AccountOperationResponse, AccountOperationType, Instrument, InstrumentAmount, InstrumentId, OperationStatus, UnixTimestamp, XAddress } from "@c3exchange/common"
+import { AccountId, AccountOperationResponse, AccountOperationType, Instrument, InstrumentAmount, InstrumentId, OperationStatus, UnixTimestamp, UserAddress, XAddress } from "@c3exchange/common"
 import { WithdrawResult, WormholeWithdrawResult } from "../types"
 
 interface DepositExtraInfo {
@@ -10,8 +10,11 @@ interface DepositExtraInfo {
 interface WithdrawExtraInfo {
     maxFees: InstrumentAmount
     maxBorrow: InstrumentAmount
+    borrow: InstrumentAmount
+    principal: InstrumentAmount
     lockedCash: InstrumentAmount
     destination: XAddress
+    solanaOwnerAddress: UserAddress
 }
 
 interface WormholeWithdrawExtraInfo extends WithdrawExtraInfo {
@@ -45,6 +48,11 @@ interface DepositOperation extends BaseAccountOperation {
     extraInfo: DepositExtraInfo
 }
 
+interface RepayOperation extends BaseAccountOperation {
+    type: AccountOperationType.REPAY
+    extraInfo: DepositExtraInfo
+}
+
 interface WithdrawOperation extends BaseAccountOperation {
     type: AccountOperationType.WITHDRAW
     extraInfo: WithdrawExtraInfo
@@ -64,7 +72,7 @@ interface LiquidateOperation extends BaseAccountOperation {
     extraInfo: LiquidateExtraInfo
 }
 
-type AccountOperation = DepositOperation | WithdrawOperation | WormholeWithdrawOperation | ReceivedLiquidationOperation | LiquidateOperation | BaseAccountOperation
+type AccountOperation = DepositOperation | WithdrawOperation | WormholeWithdrawOperation | ReceivedLiquidationOperation | LiquidateOperation | BaseAccountOperation | RepayOperation
 
 async function toAccountOperation(operation: AccountOperationResponse, getInstrument: (instrumentId: InstrumentId) => Promise<Instrument>): Promise<AccountOperation> {
     const currentInstrument = await getInstrument(operation.instrumentId)
@@ -89,9 +97,13 @@ async function toAccountOperation(operation: AccountOperationResponse, getInstru
                 extraInfo: {
                     maxFees: InstrumentAmount.fromDecimal(currentInstrument, operation.extraInfo.maxFees),
                     maxBorrow: InstrumentAmount.fromDecimal(currentInstrument, operation.extraInfo.maxBorrow),
+                    borrow: InstrumentAmount.fromDecimal(currentInstrument, operation.extraInfo.borrow),
+                    principal: InstrumentAmount.fromDecimal(currentInstrument, operation.extraInfo.principal),
                     lockedCash: InstrumentAmount.fromDecimal(currentInstrument, operation.extraInfo.lockedCash),
-                    destination: operation.extraInfo.destination
-                }
+                    destination: operation.extraInfo.destination,
+                    ...("sendTransferTxId" in operation.extraInfo && { sendTransferTxId: operation.extraInfo.sendTransferTxId }),
+                    solanaOwnerAddress: operation.extraInfo.solanaOwnerAddress
+                } as WithdrawExtraInfo
             }
         }
         case AccountOperationType.LIQUIDATE:
@@ -108,12 +120,12 @@ async function toAccountOperation(operation: AccountOperationResponse, getInstru
         }
         default: {
             // TODO: evaluate poolmove extrainfo
-            return { ...operation as any, amount  } as BaseAccountOperation
+            return { ...operation as any, amount } as BaseAccountOperation
         }
     }
 }
 
-const asWormholeWithdrawResult = (withdrawResult: WithdrawResult): WormholeWithdrawResult|undefined => {
+const asWormholeWithdrawResult = (withdrawResult: WithdrawResult): WormholeWithdrawResult | undefined => {
     if (
         "redeemWormholeVAA" in withdrawResult &&
         "getVAASequence" in withdrawResult &&
@@ -127,6 +139,7 @@ const asWormholeWithdrawResult = (withdrawResult: WithdrawResult): WormholeWithd
 export type {
     AccountOperation,
     DepositOperation,
+    RepayOperation,
     WithdrawOperation,
     WormholeWithdrawOperation,
     ReceivedLiquidationOperation,

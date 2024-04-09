@@ -58,14 +58,21 @@ export function readMaxWithdrawFeesTable(envVariable: string = 'MAX_WITHDRAW_FEE
 
 export function defaultMaxWithdrawFeesTable (): MaxWithdrawFeesTable {
     const defaultTableString = '{' +
-    '"USDC":{"ethereum":"16","avalanche":"1","algorand":"0.01"},' +
-    '"USDCIRCLE":{"ethereum":"16","avalanche":"1","algorand":"0.01"},' +
-    '"WUSDC":{"ethereum":"16","avalanche":"1","algorand":"0.01"},' +
-    '"ETH":{"ethereum":"0.0075","algorand":"0.00001"},' +
+    '"USDC":{"ethereum":"16","avalanche":"1","algorand":"0.01", "arbitrum":"1.5", "sepolia": "1"},' +
+    '"USDCIRCLE":{"ethereum":"16","avalanche":"1","algorand":"0.01", "sepolia": "1"},' +
+    '"WUSDC":{"ethereum":"16","avalanche":"1","algorand":"0.01", "sepolia": "1"},' +
+    '"ETH":{"ethereum":"0.0075","algorand":"0.00001", "sepolia": "0.0075" },' +
     '"AVAX":{"avalanche":"0.05","algorand":"0.0005"},' +
     '"ALGO":{"algorand":"0.02"},' +
-    '"BTC":{"ethereum":"0.0005","algorand":"0.00002","avalanche":"0.00055"},' +
-    '"WBTC":{"ethereum":"0.0005","algorand":"0.00002","avalanche":"0.00055"}' +
+    '"BTC":{"ethereum":"0.0005","algorand":"0.00002","avalanche":"0.00055", "sepolia": "0.0005" },' +
+    '"WBTC":{"ethereum":"0.0005","algorand":"0.00002","avalanche":"0.00055", "sepolia": "0.0005" },' +
+    '"ARB": {"arbitrum": "0.75", "algorand": "0.025" },' +
+    '"WBNB": {"bsc": "0.0067" , "algorand":"0.00008"},' +
+    '"BNB":  {"bsc": "0.0067" ,"algorand":"0.00008"},' +
+    '"WSOL": {"solana": "0.01" },' +
+    '"SOL": {"solana": "0.004" },' +
+    '"PYTH": {"solana": "0.9" }, ' +
+    '"W": {"solana": "0.5" } ' +
     '}'
     return  JSON.parse(defaultTableString) as MaxWithdrawFeesTable
 }
