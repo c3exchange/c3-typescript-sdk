@@ -2,6 +2,9 @@ const path = require('path')
 const webpack = require('webpack');
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
+/**
+ * @returns {import('webpack').Configuration}
+ */
 module.exports = (_env, argv) => {
   const nodeEnv = process.env.NODE_ENV;
   const isProduction = nodeEnv === 'production' || argv.mode === 'production';
@@ -10,11 +13,21 @@ module.exports = (_env, argv) => {
   return {
     mode: isProduction ? 'production' : 'development',
     entry: path.resolve(__dirname, 'src', 'index.ts'),
-    devtool: 'source-map',
+    target: "web",
+    devtool: "source-map",
+    output: {
+      filename: 'c3exchange-sdk.min.js',
+      path: path.join(__dirname, 'dist'),
+      globalObject: 'this',
+      library: {
+        type: 'umd',
+        name: 'C3Sdk'
+      }
+    },
     module: {
       rules: [
         {
-          test: /\.tsx?$/u,
+          test: /\.ts$/u,
           include: path.resolve(__dirname, 'src'),
           loader: 'ts-loader',
           options: {
@@ -22,15 +35,8 @@ module.exports = (_env, argv) => {
           }
         },
         {
-          test: /\.tsx?$/u,
-          exclude: /node_modules/u
-        },
-        {
-          test: /\.m?js/u,
+          test: /\.js/u,
           type: 'javascript/auto',
-        },
-        {
-          test: /\.m?js/u,
           resolve: {
             fullySpecified: false,
           },
@@ -43,13 +49,18 @@ module.exports = (_env, argv) => {
     },
     resolve: {
       extensions: ['.js', '.ts'],
-      modules: ['node_modules', '../../components'],
+      modules: [
+        path.resolve(__dirname, 'node_modules'),
+        path.resolve(__dirname, '../../components'),
+        path.resolve(__dirname, '../../node_modules'),
+      ],
       fallback: {
         crypto: require.resolve('crypto-browserify'),
         http: require.resolve('stream-http'),
         https: require.resolve('https-browserify'),
         buffer: require.resolve('buffer'),
         stream: require.resolve('stream-browserify'),
+        // "readable-stream": require.resolve('readable-stream'),
         url: require.resolve("url/"),
         fs: false,
       },
@@ -67,22 +78,6 @@ module.exports = (_env, argv) => {
         'aptos':  dummyfilePath,
         '@mysten/sui.js':  dummyfilePath,
         'near-api-js':  dummyfilePath,
-        '@project-serum/anchor':  dummyfilePath,
-        'lodash':  dummyfilePath,
-        /* The FE is failing by uncommenting these lines
-        * // '@solana/web3.js':  dummyfilePath,
-        * // '@solana/spl-token':  dummyfilePath,
-        */ 
-      }
-    },
-    target: "web",
-    output: {
-      filename: 'c3exchange-sdk.min.js',
-      path: path.join(__dirname, 'dist'),
-      globalObject: 'this',
-      library: {
-        type: 'umd',
-        name: 'C3Sdk'
       }
     },
     plugins: [
@@ -96,7 +91,11 @@ module.exports = (_env, argv) => {
       new webpack.ProgressPlugin({ profile: false }),
       // Use only in LOCAL DEVELOPMENT. This will deploy a local server to show what is inside the bundle.
       // Including the dependencies and their sizes.
-      // new BundleAnalyzerPlugin(),
+      // new BundleAnalyzerPlugin({
+      //   analyzerMode: 'disabled',
+      //   generateStatsFile: true,
+      //   statsOptions: { source: false }
+      // }),
     ],
     optimization: {
       minimize: true,

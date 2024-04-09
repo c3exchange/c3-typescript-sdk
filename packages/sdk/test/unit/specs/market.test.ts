@@ -7,56 +7,59 @@ import HttpClient from "../../../src/internal/utils/http"
 import MarketAPIClient from "../../../src/entities/markets"
 import { findMarketInfoOrFail, toMarketInfoResponse } from "../helpers/mock.methods"
 import { marketInfos } from "../helpers/mock.resources"
-import { mockedServer } from "../helpers/mock.responses"
+import { mockCommonEndpoints, mockedServer } from "../helpers/mock.responses"
 
 describe ("Market api client tests", () => {
     const httpClient = new HttpClient(defaultConfig.c3_api.server)
     const marketClient = new MarketAPIClient(httpClient, { findMarketInfoOrFail })
     const marketId: MarketId = testMarketId
 
-    marketInfos.forEach((marketInfo) => {
-        mockedServer.get(`/v1/markets/${marketInfo.id}`).reply(200, toMarketInfoResponse(marketInfo)).persist()
-        mockedServer.get(`/v1/markets/${marketInfo.id}/stats`).reply(200, [{
-            id: marketInfo.id,
-            status: "open",
-            "24hrBar": {
-                start: 100,
-                end: 100000,
-                openPrice: "20000",
-                closePrice: "21000",
-                highPrice: "21500",
-                lowPrice: "19000",
+    before(() => {
+        mockCommonEndpoints()
+        marketInfos.forEach((marketInfo) => {
+            mockedServer.get(`/v1/markets/${marketInfo.id}`).reply(200, toMarketInfoResponse(marketInfo)).persist()
+            mockedServer.get(`/v1/markets/${marketInfo.id}/stats`).reply(200, [{
+                id: marketInfo.id,
+                status: "open",
+                "24hrBar": {
+                    start: 100,
+                    end: 100000,
+                    openPrice: "20000",
+                    closePrice: "21000",
+                    highPrice: "21500",
+                    lowPrice: "19000",
+                    baseVolume: "100000",
+                    quoteVolume: "31230000000",
+                }
+            }]).persist()
+            mockedServer.get(`/v1/markets/${marketInfo.id}/orderbook`).reply(200, {
+                id: marketInfo.id,
+                priceGrouping: "0.001",
+                bids: [],
+                asks: [],
+            }).persist()
+            mockedServer.get(`/v1/markets/${marketInfo.id}/orderbook`).query({
+                priceGrouping: "0.000001", pageSize: 1
+            }).reply(200, {
+                id: marketInfo.id,
+                priceGrouping: "0.000001",
+                bids: [],
+                asks: [],
+            }).persist()
+            mockedServer.get(`/v1/markets/${marketInfo.id}/bars`).query({
+                granularity: "1D",
+                from: 100,
+                to: 10000
+            }).reply(200, [{
+                timestamp: 200,
+                open: "20000",
+                close: "21000",
+                high: "21500",
+                low: "19000",
                 baseVolume: "100000",
                 quoteVolume: "31230000000",
-            }
-        }]).persist()
-        mockedServer.get(`/v1/markets/${marketInfo.id}/orderbook`).reply(200, {
-            id: marketInfo.id,
-            priceGrouping: "0.001",
-            bids: [],
-            asks: [],
-        }).persist()
-        mockedServer.get(`/v1/markets/${marketInfo.id}/orderbook`).query({
-            priceGrouping: "0.000001", pageSize: 1
-        }).reply(200, {
-            id: marketInfo.id,
-            priceGrouping: "0.000001",
-            bids: [],
-            asks: [],
-        }).persist()
-        mockedServer.get(`/v1/markets/${marketInfo.id}/bars`).query({
-            granularity: "1D",
-            from: 100,
-            to: 10000
-        }).reply(200, [{
-            timestamp: 200,
-            open: "20000",
-            close: "21000",
-            high: "21500",
-            low: "19000",
-            baseVolume: "100000",
-            quoteVolume: "31230000000",
-        }]).persist()
+            }]).persist()
+        })
     })
 
     it ("Should get all markets", async () => {

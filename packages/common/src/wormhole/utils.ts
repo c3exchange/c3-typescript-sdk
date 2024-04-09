@@ -7,8 +7,9 @@ import { CHAIN_ID_ALGORAND, assertChain, isEVMChain, toChainName } from "./const
 import { SUPPORTED_CHAIN_IDS, isChainIdSupported } from "../chains";
 import { ChainId } from "./types";
 import { ETHEREUM_ADDRESS_LENGTH, PUBLIC_KEY_LENGTH } from "../utils";
+import { tryHexToNativeString, tryNativeToHexString, tryUint8ArrayToNative, uint8ArrayToHex } from "@certusone/wormhole-sdk";
 
-export const validateEthereumVaa = (vaa: Uint8Array, instruments: Map<AssetId, Instrument>, appId: number) => {
+export const validateVaa = (vaa: Uint8Array, instruments: Map<AssetId, Instrument>, appId: number) => {
     const PAYLOAD_DEPOSIT_HEADER = "wormholeDeposit"
     const acceptedPayloads: Set<string> = new Set<string>([PAYLOAD_DEPOSIT_HEADER])
     const parsedVaa = _parseVAAAlgorand(vaa)
@@ -26,7 +27,6 @@ export const validateEthereumVaa = (vaa: Uint8Array, instruments: Map<AssetId, I
         throw new Error('VAA: Unexpected payload')
     }
 
-    //TODO: Review this validatio which is hardcoded to ETHEREUM -> ALGORAND VAA's
     if (payloadText === "wormholeDeposit") {
         if (parsedVaa.ToAddress && (0 !== Buffer.compare(parsedVaa.ToAddress, Buffer.from(bigIntToBytes(appId, 32))))) {
             throw new Error('VAA: Unexpected target address')
@@ -58,12 +58,11 @@ export const validateEthereumVaa = (vaa: Uint8Array, instruments: Map<AssetId, I
             ({ chains: instrumentChain }) => instrumentChain && instrumentChain.length > 0
             && instrumentChain.find( 
                 (chain) => chain.chainId === parsedVaa.FromChain && 
-                           chain.tokenAddress?.toLocaleLowerCase() === `0x${parsedVaa.Contract?.substring(ETHEREUM_ADDRESS_LENGTH).toLocaleLowerCase()}`))
+                           chain.tokenAddress?.toLocaleLowerCase() === tryHexToNativeString(parsedVaa.Contract!, parsedVaa.FromChain).toLocaleLowerCase()))
 
         if (!instrument) {
             throw new Error("Unknown Algorand-side instrument for such remote token")
         }
-
 
         const amountBuffer = Buffer.from(parsedVaa.Amount)
 
@@ -80,7 +79,7 @@ export const validateEthereumVaa = (vaa: Uint8Array, instruments: Map<AssetId, I
             parsedVaa,
             amountBuffer,
             instrument,
-            from: "0x" + Buffer.from(parsedVaa.FromAddress).toString('hex').substring(ETHEREUM_ADDRESS_LENGTH),
+            from: tryUint8ArrayToNative(parsedVaa.FromAddress, parsedVaa.FromChain as ChainId),
             fromChainId: parsedVaa.chain as ChainId,
             repayAmountBuffer,
         }

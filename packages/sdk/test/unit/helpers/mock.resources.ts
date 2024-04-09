@@ -1,4 +1,4 @@
-import { ALGO_INSTRUMENT, CHAIN_ID_ETH, Instrument, InstrumentAmount, Market, MarketPrice, InstrumentWithRiskParametersResponse, RiskParametersResponse, encodeAccountId, getPublicKeyByAddress } from "@c3exchange/common";
+import { ALGO_INSTRUMENT, CHAIN_ID_ETH, Instrument, InstrumentAmount, Market, MarketPrice, InstrumentWithRiskParametersResponse, RiskParametersResponse, encodeAccountId, getPublicKeyByAddress, userAddressToAccountId } from "@c3exchange/common";
 import { MarketInfo } from "../../../src/internal/helpers/parser";
 import algosdk, { decodeAddress } from "algosdk";
 import * as ethers from "ethers";
@@ -83,11 +83,11 @@ const instruments: InstrumentWithRiskParametersResponse[] = [
 
 const ALGORAND_MNEMONIC = "popular bounce slot object pet panic van zero split bachelor trust dwarf birth hour razor drum permit earn reduce robot tortoise file bundle ability online"
 const ALGORAND_ACCOUNT = algosdk.mnemonicToSecretKey(ALGORAND_MNEMONIC)
-const ALGORAND_ACCOUNT_ID = encodeAccountId(decodeAddress(ALGORAND_ACCOUNT.addr).publicKey)
+const ALGORAND_ACCOUNT_ID = userAddressToAccountId(ALGORAND_ACCOUNT.addr)
 
 const ETHEREUM_MNEMONIC = "cactus alarm clarify supply release leaf always boost multiply sign force gossip"
 const ETHEREUM_ACCOUNT = ethers.Wallet.fromMnemonic(ETHEREUM_MNEMONIC)
-const ETHEREUM_ACCOUNT_ID = encodeAccountId(getPublicKeyByAddress(ETHEREUM_ACCOUNT.address))
+const ETHEREUM_ACCOUNT_ID = userAddressToAccountId(ETHEREUM_ACCOUNT.address)
 
 export {
     marketInfos,

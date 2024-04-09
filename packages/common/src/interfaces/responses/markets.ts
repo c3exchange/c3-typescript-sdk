@@ -1,5 +1,5 @@
 import type { Instrument } from "../entities"
-import type { MarketId, UnixTimestamp } from "../types"
+import type { FillId, MarketId, UnixTimestamp } from "../types"
 
 enum AccountSide {
     BUYER = 'BUYER',
@@ -56,6 +56,7 @@ interface MarketOrderbookResponse {
 }
 
 interface MarketTradeResponse {
+    fillId: FillId
     marketId: MarketId
     buyOrderId: string
     sellOrderId: string
@@ -64,6 +65,10 @@ interface MarketTradeResponse {
     tradeQuoteAmount: string
     tradeBuyFees: string
     tradeSellFees: string
+    tradeBuyBorrow: string,
+    tradeBuyRepay: string,
+    tradeSellBorrow: string,
+    tradeSellRepay: string,
     tradePrice: string
     buyOrderCompleted: boolean
     sellOrderCompleted: boolean

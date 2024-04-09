@@ -1,17 +1,23 @@
 import { ABIType, ABIValue, bigIntToBytes, decodeAddress, encodeAddress, isValidAddress } from 'algosdk'
 import sha512 from "js-sha512"
 import base32 from "hi-base32"
+import bs58 from 'bs58';
 import assert from 'assert'
 import { ethers } from 'ethers'
 import { UserAddress, AssetId, Hex, Base64, AppId, AccountId, Account } from '../interfaces'
+import { C3_ACCOUNT_TYPE_UTILS, C3AccountType, C3_ACCOUNT_TYPES, C3_ACCOUNT_TYPE_ALGORAND, C3_ACCOUNT_TYPE_EVM, CHAIN_ID_TO_ACCOUNT_TYPE, SupportedChainId, findChainIdByAddress, getPublicKeyByAddress } from '../chains'
+import { getEthereumAddressByPublicKey } from '../chains/evm'
+import { CHAIN_ID_ALGORAND } from '@certusone/wormhole-sdk'
 
-export const MAX_SIGNATURE_LENGTH = 65
+export const ETH_SIGNATURE_LENGTH = 65
+export const MAX_SIGNATURE_LENGTH = ETH_SIGNATURE_LENGTH
 export const SHA256_HASH_LENGTH = 32
 export const ETHEREUM_ADDRESS_LENGTH = 24
 export const PUBLIC_KEY_LENGTH = 32
 export const C3_PUBLIC_KEY_LENGTH = 32
 export const C3_CHECKSUM_LENGTH = 3
-export const C3_ACCOUNT_ID_LENGTH = 59
+export const C3_MODERN_ACCOUNT_ID_LENGTH = 61
+export const C3_LEGACY_ACCOUNT_ID_LENGTH = 59
 export const C3_CHECKSUM_PREFIX = new Uint8Array(Buffer.from("(C3.IO)"))
 
 export type AlgorandType = bigint | string | boolean | number | Uint8Array
@@ -935,6 +941,10 @@ export function decodeEthereumAddress(ethereumAddress: string): Uint8Array {
     return padLeftUint8Array(new Uint8Array(Buffer.from(ethereumAddress, "hex")), 32)
 }
 
+export function decodeSolanaAddress(solanaAddress: string): Uint8Array {
+    return bs58.decode(solanaAddress)
+}
+
 export function base16ToBase64 (hexValue: Hex): Base64 {
     if (hexValue.startsWith("0x")) {
         hexValue = hexValue.slice(2)
@@ -962,22 +972,47 @@ export function arrayEqual(arrayA: Uint8Array, arrayB: Uint8Array): boolean {
     return arrayA.length === arrayB.length && arrayA.every((byte, index) => arrayB[index] === byte)
 }
 
-export function getChecksum(publicKey: Uint8Array): Uint8Array {
-    return sha256Hash(concatArrays([C3_CHECKSUM_PREFIX, publicKey])).slice(SHA256_HASH_LENGTH - C3_CHECKSUM_LENGTH)
+export function getChecksum(c3AccountType: Uint8Array, publicKey: Uint8Array): Uint8Array {
+    return sha256Hash(concatArrays([C3_CHECKSUM_PREFIX, c3AccountType, publicKey])).slice(SHA256_HASH_LENGTH - C3_CHECKSUM_LENGTH)
+}
+
+export function decodeAccountIdFull(accountId: AccountId): { publicKey: Uint8Array, c3AccountType: C3AccountType } {
+    let encodedC3AccountType = new Uint8Array()
+    let bytes: Uint8Array
+    let c3AccountType: C3AccountType
+    if (accountId.length === C3_LEGACY_ACCOUNT_ID_LENGTH) {
+        const parts = /^C3_([A-Z2-7]+)$/.exec(accountId)
+        if (parts === null)
+            throw new Error(`Invalid account id ${accountId}`)
+        bytes = new Uint8Array(base32.decode.asBytes(parts[1]))
+        const EVM_KEY_LENGTH = 20
+        const C3_KEY_LENGTH = 32
+        if (bytes.slice(0, C3_KEY_LENGTH - EVM_KEY_LENGTH).every(byte => byte === 0)) {
+            c3AccountType = C3_ACCOUNT_TYPE_EVM
+        } else {
+            c3AccountType = C3_ACCOUNT_TYPE_ALGORAND
+        }
+    } else if (accountId.length === C3_MODERN_ACCOUNT_ID_LENGTH) {
+        const parts = /^C3_([0-9A-F][0-9A-F])([A-Z2-7]+)$/.exec(accountId)
+        if (parts === null)
+            throw new Error(`Invalid account id ${accountId}`)
+        c3AccountType = parseInt(parts[1], 16)
+        if (!C3_ACCOUNT_TYPES.includes(c3AccountType))
+            throw new Error(`Invalid account type ${c3AccountType}`)
+        encodedC3AccountType = encodeUint8(c3AccountType)
+        bytes = new Uint8Array(base32.decode.asBytes(parts[2]))
+    } else {
+        throw new Error(`Invalid account id length for ${accountId}`)
+    }
+    const publicKey = bytes.slice(0, C3_PUBLIC_KEY_LENGTH)
+    const checksum = bytes.slice(C3_PUBLIC_KEY_LENGTH)
+    if (!arrayEqual(getChecksum(encodedC3AccountType, publicKey), checksum))
+        throw new Error(`Invalid checksum for ${accountId}`)
+    return { publicKey, c3AccountType }
 }
 
 export function decodeAccountId(accountId: AccountId): Uint8Array {
-    if (accountId.length !== C3_ACCOUNT_ID_LENGTH)
-        throw new Error(`Invalid account id length for ${accountId}`)
-    const parts = /^C3_([A-Z2-7]+)$/.exec(accountId)
-    if (parts === null)
-        throw new Error(`Invalid account id ${accountId}`)
-    const bytes = new Uint8Array(base32.decode.asBytes(parts[1]))
-    const publicKey = bytes.slice(0, C3_PUBLIC_KEY_LENGTH)
-    const checksum = bytes.slice(C3_PUBLIC_KEY_LENGTH)
-    if (!arrayEqual(getChecksum(publicKey), checksum))
-        throw new Error(`Invalid checksum for ${accountId}`)
-    return publicKey
+    return decodeAccountIdFull(accountId).publicKey
 }
 
 export function isValidAccountId(accountId: AccountId): boolean {
@@ -989,13 +1024,44 @@ export function isValidAccountId(accountId: AccountId): boolean {
     }
 }
 
-export function encodeAccountId(publicKey: Uint8Array): AccountId {
+export function encodeAccountId(publicKey: Uint8Array, chainId: SupportedChainId): AccountId {
+    const c3AccountType = CHAIN_ID_TO_ACCOUNT_TYPE[chainId]
     if (publicKey.length !== C3_PUBLIC_KEY_LENGTH)
         throw new Error(`Invalid public key length for ${publicKey}`)
-    const checksum = getChecksum(publicKey)
-    return "C3_" + base32.encode(concatArrays([publicKey, checksum]))
+    const useLegacy = c3AccountType === undefined || c3AccountType == C3_ACCOUNT_TYPE_ALGORAND || c3AccountType == C3_ACCOUNT_TYPE_EVM
+    const encodedType = useLegacy ? new Uint8Array() : encodeUint8(c3AccountType)
+    const checksum = getChecksum(encodedType, publicKey)
+    return "C3_" + Buffer.from(encodedType).toString('hex') + base32.encode(concatArrays([publicKey, checksum]))
 }
 
 export function algorandAddressToAccountId(address: UserAddress): AccountId {
-    return encodeAccountId(decodeAddress(address).publicKey)
+    return encodeAccountId(decodeAddress(address).publicKey, CHAIN_ID_ALGORAND)
+}
+
+export function userAddressToAccountId(address: UserAddress): AccountId {
+    const chainId = findChainIdByAddress(address)
+    const c3AccountType = CHAIN_ID_TO_ACCOUNT_TYPE[chainId]
+    const publicKey = C3_ACCOUNT_TYPE_UTILS[c3AccountType].getPublicKey(address)
+    return encodeAccountId(publicKey, chainId)
+}
+
+export function accountIdToUserAddress(accountId: AccountId): UserAddress {
+    const { publicKey, c3AccountType } = decodeAccountIdFull(accountId)
+    return C3_ACCOUNT_TYPE_UTILS[c3AccountType].getAddressByPublicKey(publicKey)
+}
+
+export function decodeSignature(encodedSignature: string): Uint8Array {
+    const decodedSignature = decodeBase64(encodedSignature)
+    const ETH_V_VALUE_INDEX = ETH_SIGNATURE_LENGTH - 1
+    const ETH_LEGACY_V_VALUE = 27
+    // If we have an Ethereum Signature, we need to ensure the v value is in the legacy format {27, 28}
+    // Normally wallets can return the standard mathemathical value of {0, 1} so we need to change it
+    // WARNING: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md mentions other set of values
+    // based on {0,1} + CHAIN_ID * 2 + 35, so we need to be careful that wallets are not outputting these
+    if (decodedSignature.length === ETH_SIGNATURE_LENGTH) {
+        if (decodedSignature[ETH_V_VALUE_INDEX] < ETH_LEGACY_V_VALUE) {
+            decodedSignature[ETH_V_VALUE_INDEX] += ETH_LEGACY_V_VALUE
+        }
+    }
+    return decodedSignature
 }

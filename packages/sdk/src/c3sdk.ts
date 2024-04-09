@@ -31,19 +31,29 @@ import {
   getWormholeContractsByNetwork,
   InstrumentWithRiskParameters,
   InstrumentWithRiskParametersResponse,
-  encodeAccountId,
-  getPublicKeyByAddress,
+  buildDelegationOperation,
+  EphemeralSession,
+  Signature,
+  decodeBase64,
+  userAddressToAccountId,
+  AccountLoginStatusResponse,
+  UnixTimestampInSeconds,
+  RawSignature,
+  maxOrderExpiration,
+  accountIdToUserAddress,
 } from "@c3exchange/common"
-import { DepositFundsAlgorand, DepositFundsWormhole, DepositOverrides, DepositResult, SubmitWormholeVAA, WormholeDepositResult } from "./internal/types"
+import { DepositFundsAlgorand, DepositFundsWormhole, DepositOverrides, DepositResult, SubmitWormholeVAA, WormholeDepositResult, WormholeSigner } from "./internal/types"
 import { AlgorandDeposit, WormholeDeposit } from "./internal/account_endpoints"
 import { prepareAlgorandDeposit, prepareWormholeDeposit } from "./internal/helpers/deposit"
 import algosdk, { waitForConfirmation } from "algosdk"
 import BigNumber from "bignumber.js"
 import { ROUNDS_TO_WAIT_ON_DEPOSIT } from "./internal/const"
 import { logger } from "ethers"
+import { Connection } from "@solana/web3.js"
 import { asInstrumentWithRiskParameters } from "./internal/helpers/parser"
+import { cryptoUtilsBuilder } from "./internal/utils/crypto"
 
-export { asWormholeDepositResult, getWormholeDepositInfo } from "./internal/helpers/deposit"
+export { asWormholeDepositResult, getWormholeDepositInfo, isCCTPInstrument } from "./internal/helpers/deposit"
 export { asWormholeWithdrawResult } from "./internal/helpers/operation"
 
 export class C3SDK {
@@ -56,12 +66,16 @@ export class C3SDK {
   public algodClient: algosdk.Algodv2
   private wormholeService: WormholeService
 
+  private cryptoUtils = cryptoUtilsBuilder()
+
   constructor(private config = defaultConfig) {
     // To avoid other classes to steal our cache, we need to bind this methods to our instance
     this.getInstruments = this.getInstruments.bind(this)
     this.findInstrumentOrFail = this.findInstrumentOrFail.bind(this)
     this.findMarketInfoOrFail = this.findMarketInfoOrFail.bind(this)
     this.login = this.login.bind(this)
+    this._loginWithEphemeral = this._loginWithEphemeral.bind(this)
+    this.generateAccountEntity = this.generateAccountEntity.bind(this)
     this.getSlotId = this.getSlotId.bind(this)
 
     let { server, port } = this.config.c3_api
@@ -123,40 +137,112 @@ export class C3SDK {
 
   getMarkets = (): MarketsEntity => this.markets
 
-  async login <T extends MessageSigner = MessageSigner> (messageSigner: T, accountSession?: AccountSession, webMode = false, operateOn?: UserAddress): Promise<Account<T>> {
+  async login <T extends MessageSigner = MessageSigner> (
+    messageSigner: T,
+    accountSession?: AccountSession,
+    isWebMode = false,
+    operateOn?: UserAddress,
+    operateOnExpiration?: UnixTimestampInSeconds,
+  ): Promise<Account<T>> {
+    let encryptionKey: Uint8Array | undefined
     if (!accountSession) {
-      const { address, chainId } = messageSigner
-      const nonceRes: { nonce: string } = await this.client.get("/v1/login/start", { address, chainId });
-      const signature = await this.signNonce(nonceRes.nonce, messageSigner)
-
-      let clientHeaders
-      if (webMode === true) {
-        clientHeaders = { "web-mode": "true" }
+      const signature = await this._startLoginOperation(messageSigner)
+      const { accountId, token, userId, firstLogin } = await this._completeLoginOperation(messageSigner, signature, isWebMode)
+      accountSession = { accountId, token, userId, firstLogin, chainId: messageSigner.chainId }
+    } else if (accountSession.encryptedEphimeralKey) {
+      const status = await this.client.get<AccountLoginStatusResponse>("/v1/login/status", {}, {"Authorization": `Bearer ${accountSession.token}`}, true)
+      if (status.ephimeralEncryptionKey) {
+        encryptionKey = decodeBase64(status.ephimeralEncryptionKey)
       }
-      accountSession = await this.client.post<AccountLoginCompleteResponse>(
-        "/v1/login/complete",
-        { address, chainId, signature },
-        clientHeaders,
-        webMode,
-      );
     }
 
+    let ephemeralKey, ephemeralExpiration
+    if (encryptionKey && accountSession.encryptedEphimeralKey) {
+      ephemeralExpiration = accountSession.ephemeralExpiration
+      ephemeralKey = await this.cryptoUtils.decrypt(encryptionKey, accountSession.encryptedEphimeralKey)
+    }
+
+    return this.generateAccountEntity(
+      messageSigner,
+      accountSession,
+      isWebMode,
+      operateOn,
+      operateOnExpiration,
+      ephemeralKey,
+      ephemeralExpiration,
+    )
+  }
+
+  /**
+   * Only for internal use. This method is used to login with an ephemeral account
+   * @returns Returns a completeLogin method that must be called to obtain the Account instance
+   */
+  async _loginWithEphemeral<T extends MessageSigner = MessageSigner> (messageSigner: T, webMode = false, operateOn?: UserAddress, operateOnExpiration?: UnixTimestampInSeconds) {
+    const loginStartSignature: Signature = await this._startLoginOperation(messageSigner)
+    return async (): Promise<Account<T>> => {
+      const ephemeralAccount = algosdk.generateAccount()
+      const ephemeralAddress = ephemeralAccount.addr
+      const SESSION_DURATION = 14 * 24 * 60 * 60 // 14 days
+      const ephemeralExpiresOn = maxOrderExpiration() + SESSION_DURATION
+      const { dataToSign } = buildDelegationOperation(messageSigner.address, ephemeralAddress, ephemeralExpiresOn, 0)
+      const ephemeralSignature: RawSignature = await messageSigner.signMessage(dataToSign)
+      const ephemeralSession: EphemeralSession = {
+        address: ephemeralAddress,
+        expiresOn: ephemeralExpiresOn,
+        signature: encodeBase64(ephemeralSignature),
+      }
+      const { userId, accountId, token, firstLogin, encryptionKey } = await this._completeLoginOperation(messageSigner, loginStartSignature, webMode, ephemeralSession)
+      const accountSession: AccountSession = { userId, accountId, token, firstLogin, chainId: messageSigner.chainId }
+
+      if (ephemeralSession && encryptionKey) {
+        accountSession.encryptedEphimeralKey = await this.cryptoUtils.encrypt(decodeBase64(encryptionKey), ephemeralAccount.sk)
+        accountSession.ephemeralAddress = ephemeralAddress
+        accountSession.ephemeralExpiration = ephemeralExpiresOn
+      }
+
+      return this.generateAccountEntity(
+        messageSigner,
+        accountSession,
+        webMode,
+        operateOn,
+        operateOnExpiration,
+        ephemeralAccount.sk,
+        ephemeralExpiresOn,
+      )
+    }
+  }
+
+  private async generateAccountEntity <T extends MessageSigner = MessageSigner> (
+    messageSigner: T,
+    accountSession: AccountSession,
+    isWebMode: boolean,
+    operateOn?: UserAddress,
+    operateOnExpiration?: UnixTimestampInSeconds,
+    ephemeralKey?: Uint8Array,
+    ephemeralExpiration?: UnixTimestampInSeconds,
+  ) {
     return new Account<T>(
       this.config.c3_api,
       accountSession,
       messageSigner,
-      webMode,
       {
         depositAlgorand: this.depositAlgorand,
         depositWormhole: this.depositWormhole,
         getSlotId: this.getSlotId,
         findMarketInfoOrFail: this.findMarketInfoOrFail,
         findInstrumentOrFail: this.findInstrumentOrFail,
-        services: { wormholeService: this.wormholeService, algod: this.algodClient },
+        services: {
+          wormholeService: this.wormholeService,
+          algod: this.algodClient,
+          solanaConnection: new Connection(this.config.solana_cluster, "finalized")
+        },
       },
-      (operateOn ? encodeAccountId(getPublicKeyByAddress(operateOn)) : undefined),
+      {
+        operateOn: (operateOn ? userAddressToAccountId(operateOn) : undefined), isWebMode,
+        operateOnExpiration, ephemeralKey, ephemeralExpiration,
+      },
     );
-  }
+  } 
 
   public submitWormholeVAA: SubmitWormholeVAA = async (
     receiverAccountId: AccountId,
@@ -173,7 +259,6 @@ export class C3SDK {
 
   private depositAlgorand: DepositFundsAlgorand = async (
     receiverAccountId: AccountId,
-    receiverUserAddress: UserAddress,
     amount: InstrumentAmount,
     repayAmount: InstrumentAmount,
     funder: AlgorandSigner,
@@ -186,7 +271,7 @@ export class C3SDK {
         this.algodClient,
         systemInfo.contractIds,
         systemInfo.serverAddress,
-        receiverUserAddress,
+        accountIdToUserAddress(receiverAccountId),
         amount.instrument.asaId,
         amount,
         slotId,
@@ -211,14 +296,12 @@ export class C3SDK {
 
   private depositWormhole: DepositFundsWormhole = async (
     receiverAccountId: AccountId,
-    receiverUserAddress: UserAddress,
     amount: InstrumentAmount,
     repayAmount: InstrumentAmount,
-    funder: EVMSigner,
+    funder: WormholeSigner,
     originChain: ChainName
   ): Promise<WormholeDepositResult> => {
     return prepareWormholeDeposit(
-      receiverUserAddress,
       receiverAccountId,
       amount,
       repayAmount,
@@ -267,7 +350,30 @@ export class C3SDK {
       })
   }
 
-  private signNonce = async (nonce: string, messageSigner: MessageSigner): Promise<string> => {
+  private _startLoginOperation = async (messageSigner: MessageSigner): Promise<Signature> => {
+    const { address, chainId } = messageSigner
+    const nonceRes: { nonce: string } = await this.client.get("/v1/login/start", { address, chainId });
+    const signature = await this._signLoginNonce(nonceRes.nonce, messageSigner)
+    return signature
+  }
+
+  private _completeLoginOperation = async (messageSigner: MessageSigner, signature: Signature, webMode: boolean, ephemeralData?: EphemeralSession) => {
+    const { address, chainId } = messageSigner
+    let clientHeaders
+    if (webMode === true) {
+      clientHeaders = { "web-mode": "true" }
+    }
+    const accountSession = await this.client.post<AccountLoginCompleteResponse>(
+      "/v1/login/complete",
+      { address, chainId, signature, ephemeralData },
+      clientHeaders,
+      webMode,
+    );
+
+    return accountSession
+  }
+
+  private _signLoginNonce = async (nonce: string, messageSigner: MessageSigner): Promise<string> => {
     try {
       const nonceAsBytes = new Uint8Array(Buffer.from(nonce, "ascii"))
       const sig = await messageSigner.signMessage(nonceAsBytes);

@@ -1,18 +1,21 @@
-import { Base64, InstrumentSlotId, OrderId, Signature, UnixTimestampInMiliseconds, UserAddress, OrderNonce, MarketId } from '../interfaces'
+import { Base64, InstrumentSlotId, OrderId, Signature, UnixTimestampInMiliseconds, UserAddress, OrderNonce, MarketId, AccountId } from '../interfaces'
 import { ContractAmount, MessageSignCallback, MessageSigner } from '../tools'
 import { encodeBase64, sha256Hash, IPackedInfo, packABIString, encodeABIValue, concatArrays, decodeBase64 } from '../utils'
-import { getDataToSign } from './signerUtils'
+import { getDataToSign } from './utils'
 import { MarketFee } from "../tools"
-export interface CancelRequest{
-    creator: UserAddress,
-    user: UserAddress,
+
+export interface CancelRequest {
+    creator?: UserAddress,
+    accountId: AccountId,
     orders?: Base64[],
     allOrdersUntil?: UnixTimestampInMiliseconds,
     marketId?: MarketId,
 }
+
 export interface SignedCancelRequest extends CancelRequest {
     signature: Signature,
 }
+
 export interface OrderData {
     account: Base64,
     sellSlotId: InstrumentSlotId,
@@ -118,3 +121,4 @@ export async function signCancelOrders(request: CancelRequest, signMessageCallba
     const signature = await signMessageCallback(encodedCancelRequest)
     return { ...request, signature: encodeBase64(signature) }
 }
+

@@ -1,6 +1,6 @@
 {
   "name": "@c3exchange/sdk",
-  "version": "0.4.0-alpha.3",
+  "version": "0.5.0-alpha.1",
   "description": "",
   "main": "build/src/index.js",
   "module": "build/src/index.js",
@@ -9,7 +9,8 @@
   "scripts": {
     "clean": "rimraf build && rimraf dist && rimraf .buildinfo",
     "build": "npm run clean && tsc --build && webpack",
-    "build:deploy": "npm run clean && tsc --build tsconfig.build.json && webpack",
+    "build:deploy": "npm run clean && tsc --build tsconfig.build.json && cross-env NODE_ENV=production webpack",
+    "bundle-report": "webpack-bundle-analyzer --port 4200 dist/stats.json",
     "prepack": "npm run build:deploy",
     "test": "mocha -r ts-node/register ./test/**/*.test.ts ./test/**/*.spec.ts",
     "test-script": "mocha -r ts-node/register",
@@ -22,13 +23,19 @@
   "author": "c3.io",
   "license": "Apache-2.0",
   "dependencies": {
-    "@c3exchange/common": "^0.4.0-alpha.3",
+    "@c3exchange/common": "^0.5.0-alpha.1",
+    "algosdk": "^2.5.0",
     "axios": "^1.4.0",
-    "socket.io-client": "^4.5.4"
+    "bech32": "^1.1.4",
+    "ethers": "^5.7.2",
+    "tiny-typed-emitter": "^2.1.0",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@certusone/wormhole-sdk-proto-web": "^0.0.7",
     "@types/chai": "^4.3.4",
     "@types/mocha": "^10.0.1",
+    "@types/ws": "^8.5.10",
     "buffer": "^6.0.3",
     "chai": "^4.3.7",
     "cross-env": "^7.0.3",
@@ -42,6 +49,7 @@
     "stream-http": "^3.2.0",
     "ts-loader": "^9.4.2",
     "url": "^0.11.1",
+    "uuid": "^8.3.2",
     "webpack": "^5.76.0",
     "webpack-bundle-analyzer": "^4.9.0",
     "webpack-cli": "^5.0.1"

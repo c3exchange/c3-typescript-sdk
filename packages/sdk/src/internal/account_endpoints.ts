@@ -71,6 +71,7 @@ interface WithdrawParams extends CreditOperation {
     maxBorrow: InstrumentAmount
     maxFees: InstrumentAmount
     destination: XRecipientAddress
+    solanaOwnerAddress?: UserAddress
 }
 
 interface LiquidationParams {
@@ -107,7 +108,7 @@ interface SerializableSettlementTicket {
 }
 
 //FIXME: this is a temporary solution, we need to fix bigint serialization in axios
-interface SerializableNewOrderDataRequestBody {
+export interface SerializableNewOrderDataRequestBody {
     marketId: MarketId
     type: OrderType
     side: OrderSide
@@ -200,19 +201,19 @@ export default class AccountClient {
     }
 
     // Delete methods
-    cancelOrders = (accountId: AccountId, orders: OrderId[], signature: Signature, creator?: AccountId) =>
+    cancelOrders = (accountId: AccountId, orders: OrderId[], signature: Signature, creator?: UserAddress) =>
         this.client.delete<CancelledOrderResponse[]>(`/v1/accounts/${accountId}/orders`, {
             signature,
             orders,
             creator,
         })
-    cancelAllOrders = (accountId: AccountId, signature: Signature, allOrdersUntil: UnixTimestamp, creator?: AccountId) =>
+    cancelAllOrders = (accountId: AccountId, signature: Signature, allOrdersUntil: UnixTimestamp, creator?: UserAddress) =>
         this.client.delete<CancelledOrderResponse[]>(`/v1/accounts/${accountId}/orders`, {
             signature,
             allOrdersUntil,
             creator
         })
-    cancelAllOrdersByMarket = (accountId: AccountId, marketId: MarketId, signature: Signature, allOrdersUntil: UnixTimestamp, creator: AccountId) =>
+    cancelAllOrdersByMarket = (accountId: AccountId, marketId: MarketId, signature: Signature, allOrdersUntil: UnixTimestamp, creator?: UserAddress) =>
     this.client.delete<CancelledOrderResponse[]>(`/v1/accounts/${accountId}/markets/${marketId}/orders`, {
         signature,
         allOrdersUntil,
@@ -220,7 +221,7 @@ export default class AccountClient {
     })
 
     // Operation methods
-    submitWithdraw = (accountId: AccountId, { instrumentId, amount, maxBorrow, maxFees, signature, destination, lease, lastValid }: WithdrawParams) =>
+    submitWithdraw = (accountId: AccountId, { instrumentId, amount, maxBorrow, maxFees, signature, destination, lease, lastValid, solanaOwnerAddress }: WithdrawParams) =>
         this.client.post<OperationSuccess, WithdrawRequest>(`/v1/accounts/${accountId}/withdraw`, {
             instrumentId,
             amount: amount.toDecimal(),
@@ -228,7 +229,8 @@ export default class AccountClient {
             maxFees: maxFees.toDecimal(),
             signature: encodeBase64(signature),
             lease: encodeBase64(lease),
-            destination, lastValid
+            destination, lastValid,
+            solanaOwnerAddress
         })
     submitLend = (accountId: AccountId, { amount, instrumentId, signature, lease, lastValid }: CreditOperation) =>
         this.client.post<OperationSuccess, CreditOperationRequest>(`/v1/accounts/${accountId}/credit/${instrumentId}/lend`, {

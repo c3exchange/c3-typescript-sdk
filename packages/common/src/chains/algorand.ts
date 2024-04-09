@@ -12,6 +12,12 @@ const AlgorandUtils: ChainTools = {
     getAddressByPublicKey: (publickKeyAddress: Uint8Array) => algosdk.encodeAddress(publickKeyAddress),
     getDataPrefix: () => new Uint8Array(Buffer.from([77, 88])), // "MX"
     isValidAddress: algosdk.isValidAddress,
+    toValidAddress: (address: string) => {
+        if (!algosdk.isValidAddress(address)) {
+            throw new Error(`Address is invalid: ${address}`)
+        }
+        return address
+    },
     getXAddress: (address: UserAddress) => ({ chainId: CHAIN_ID_ALGORAND, address }),
     getXContractAddress: (tokenAddress: string) => ({ chain: "algorand", tokenAddress }),
     getSigningMethod: () => SignMethod.SIGNING_METHOD_ED25519,

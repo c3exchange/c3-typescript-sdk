@@ -15,6 +15,14 @@ interface InstrumentPriceResponse {
     price: string
 }
 
+interface LiquidationPriceResponse {
+    id: InstrumentId
+    price: string
+    borrowPremiumPrice: string
+    lendDiscountPrice: string
+    cashDiscountPrice: string
+}
+
 
 // Encoded Risk Parameters Response
 interface RiskParametersResponse {
@@ -37,5 +45,6 @@ export type {
     InstrumentPriceResponse,
     InstrumentWithRiskParametersResponse,
     RiskParametersResponse,
-    InstrumentRiskParametersResponse
+    InstrumentRiskParametersResponse,
+    LiquidationPriceResponse
 }

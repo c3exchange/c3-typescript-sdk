@@ -3,6 +3,7 @@ import type { ChainId, XAddress, XRecipientAddress } from "../../wormhole"
 import { MarketTradeResponse } from "./markets"
 import { SettlementTicket } from "../../internal/index"
 import {InstrumentPriceResponse} from "./instruments"
+import { LiquidationPriceResponse } from "./instruments"
 
 
 interface Account {
@@ -71,17 +72,26 @@ interface AccountOrderResponse {
     addedOn: UnixTimestamp
 }
 
-interface  InsolventAccount{
+interface LiquidatablePositionResponse {
+    instrumentId: InstrumentId
+    amount: string
+    priceInUsd: string
+    liquidationPriceInUsd: string
+    valueInUsd: string
+    liquidationValueInUsd: string
+}
+
+interface InsolventAccount{
     accountId: AccountId;
     health: string;
-    cash: BaseInstrumentAmountRequest[]
-    pool: BaseInstrumentAmountRequest[]
-  }
+    cash: LiquidatablePositionResponse[]
+    pool: LiquidatablePositionResponse[]
+}
 
-  interface InsolventAccountsResponse {
-    prices: InstrumentPriceResponse[];
+interface InsolventAccountsResponse {
+    prices: LiquidationPriceResponse[];
     accounts: InsolventAccount[];
-  }
+}
 
 interface CancelOrderTicketResponse {
     account: AccountId
@@ -103,6 +113,7 @@ enum OperationStatus {
     PENDING = 'pending',
     SETTLED = 'settled',
     FAILED = 'failed',
+    DELAYED = 'delayed',
 }
 
 enum AccountOperationType {
@@ -126,9 +137,12 @@ interface DepositExtraInfo {
 
 interface WithdrawExtraInfo {
     maxBorrow: string
+    borrow: string
+    principal: string
     lockedCash: string
     maxFees: string
     destination: XAddress
+    solanaOwnerAddress?: UserAddress
 }
 
 interface WormholeWithdrawExtraInfo extends WithdrawExtraInfo {
@@ -149,7 +163,7 @@ interface ReceivedLiquidationExtraInfo {
 
 type OperationExtraInfo = DepositExtraInfo | WithdrawExtraInfo | WormholeWithdrawExtraInfo | ReceivedLiquidationExtraInfo | LiquidateExtraInfo
 
-interface BaseAccountOperation {
+interface BaseAccountOperationResponse {
     id: number
     type: AccountOperationType
     status: OperationStatus
@@ -158,31 +172,31 @@ interface BaseAccountOperation {
     amount: string
     createdOn: UnixTimestamp,
 }
-interface DepositOperation extends BaseAccountOperation {
+interface DepositOperationResponse extends BaseAccountOperationResponse {
     type: AccountOperationType.DEPOSIT
     extraInfo: DepositExtraInfo
 }
 
-interface WithdrawOperation extends BaseAccountOperation {
+interface WithdrawOperationResponse extends BaseAccountOperationResponse {
     type: AccountOperationType.WITHDRAW
     extraInfo: WithdrawExtraInfo
 }
 
-interface WormholeWithdrawOperation extends WithdrawOperation {
+interface WormholeWithdrawOperationResponse extends WithdrawOperationResponse {
     extraInfo: WormholeWithdrawExtraInfo
 }
 
-interface ReceivedLiquidationOperation extends BaseAccountOperation {
+interface ReceivedLiquidationOperationResponse extends BaseAccountOperationResponse {
     type: AccountOperationType.RECEIVED_LIQUIDATION
     extraInfo: ReceivedLiquidationExtraInfo
 }
 
-interface LiquidateOperation extends BaseAccountOperation {
+interface LiquidateOperationResponse extends BaseAccountOperationResponse {
     type: AccountOperationType.LIQUIDATE,
     extraInfo: LiquidateExtraInfo
 }
 
-type AccountOperationResponse = DepositOperation | WithdrawOperation | WormholeWithdrawOperation | ReceivedLiquidationOperation | LiquidateOperation | BaseAccountOperation
+type AccountOperationResponse = DepositOperationResponse | WithdrawOperationResponse | WormholeWithdrawOperationResponse | ReceivedLiquidationOperationResponse | LiquidateOperationResponse | BaseAccountOperationResponse
 
 interface MarginAssetInfoResponse {
     assetId: AssetId
@@ -207,6 +221,10 @@ interface PortfolioOverviewResponse {
     availableMargin: string
     initialMarginCalculation: MarginResponse
     maintenanceMarginCalculation: MarginResponseMinimized
+    initialMarginSupport: number
+    initialMarginRequirement: number
+    maintenanceMarginSupport: number
+    maintenanceMarginRequirement: number
     buyingPower: string
     health: string
     leverage: string
@@ -263,6 +281,7 @@ interface WithdrawRequest extends WithdrawMetadata {
     maxBorrow: string,
     maxFees: string,
     destination: XRecipientAddress
+    solanaOwnerAddress?: UserAddress
 }
 
 interface LiquidationParamsRequest extends BaseMetaDataRequest {
@@ -314,6 +333,7 @@ export type {
     CancelOrderTicketResponse,
     CancelledOrderResponse,
     AccountOperationResponse,
+    WithdrawOperationResponse,
     AccountBalanceResponse,
     PortfolioOverviewResponse,
     OperationSuccess,
@@ -335,5 +355,7 @@ export type {
     MarginResponse,
     MarginResponseMinimized,
     MarginAssetInfoResponse,
-    InsolventAccountsResponse
+    InsolventAccountsResponse,
+    LiquidatablePositionResponse,
+    InsolventAccount
 }

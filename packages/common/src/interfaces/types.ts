@@ -5,6 +5,7 @@ type OrderNonce = number
 type UnixTimestampInMiliseconds = number
 type UserAddress = string
 type MarketId = string
+type FillId = string
 type InstrumentId = string
 type SlotId = number
 type AccountId = string
@@ -30,6 +31,7 @@ type DecimalPicoUsdPrice = string
 type PicoUsdResponse = string
 type BorrowLendIndex = bigint
 type Address = string
+type SequenceNumber = number
 
 type ContractIds = {
     pricecaster: AppId
@@ -45,6 +47,7 @@ export type {
     UnixTimestampInMiliseconds,
     UserAddress,
     MarketId,
+    FillId,
     InstrumentId,
     AccountId,
     OrderId,
@@ -70,4 +73,5 @@ export type {
     PicoUsdResponse,
     PairId,
     DecimalAmount,
+    SequenceNumber
 }

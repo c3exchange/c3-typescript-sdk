@@ -23,8 +23,6 @@ import {
     MarketId,
     MessageSigner,
     UserAddress,
-    groupByKey,
-    AccountOrderResponse,
     AccountOrdersForMarketFilters,
     AccountLoginCompleteResponse,
     SupportedChainId,
@@ -35,7 +33,6 @@ import {
     AccountTrade,
     OperationStatus,
     AccountOperationType,
-    AccountOrdersResponse,
     EVMSigner,
     AlgorandSigner,
     toChainId,
@@ -48,7 +45,6 @@ import {
     RawSignature,
     createLiquidation,
     XContractAddress,
-    createGTDExpiration,
     OrderId,
     signCancelOrders,
     signOrder,
@@ -68,19 +64,28 @@ import {
     isValidAccountId,
     DelegationId,
     encodeAccountId,
-    getPublicKeyByAddress,
-    createDelegation
+    SolanaSigner,
+    CHAIN_UTILS,
+    Margin,
+    buildDelegationOperation,
+    Base64,
+    Signer as SignerUtil,
+    ChainId,
+    defaultOrderExpiration,
+    userAddressToAccountId,
+    isEVMChain,
+    CHAIN_ID_SOLANA,
+    getAndValidateSolanaTokenAddress,
 } from "@c3exchange/common"
-import { waitForConfirmation, type Algodv2 } from "algosdk";
+import algosdk, { waitForConfirmation, type Algodv2 } from "algosdk";
 import crypto from "crypto";
-import type { Signer, providers } from "ethers";
+import * as ethers from "ethers";
+import * as solana from "@solana/web3.js"
 import assert from "assert";
 import { ROUNDS_TO_WAIT } from "../internal/const";
 import { asMargin } from "../internal/helpers/parser"
-import { Margin } from "@c3exchange/common"
 import { getWormholeDepositInfo } from "../main";
 import { WebSocketClient } from "../ws/WebSocketClient"
-
 
 interface GetTradesQuery {
     offset?: number
@@ -114,7 +119,12 @@ export interface AccountBalance {
     portfolioOverview: PortfolioOverviewResponse
 }
 
-export interface AccountSession extends AccountLoginCompleteResponse { }
+export interface AccountSession extends Omit<AccountLoginCompleteResponse, "encryptionKey"> {
+    chainId: ChainId
+    encryptedEphimeralKey?: Base64
+    ephemeralAddress?: UserAddress
+    ephemeralExpiration?: UnixTimestampInSeconds
+}
 
 export interface AccountOperationQuery {
     types?: AccountOperationType[]
@@ -155,24 +165,45 @@ interface OrderParams {
     clientOrderId?: string
 }
 
+interface DelegationConfiguration {
+    operateOn?: AccountId
+    operateOnExpiration?: UnixTimestampInSeconds
+}
+
+interface EphemeralConfiguration {
+    ephemeralKey?: Uint8Array
+    ephemeralExpiration?: UnixTimestampInSeconds
+}
+
+type AccountConfiguration = {
+    isWebMode: boolean
+} & DelegationConfiguration & EphemeralConfiguration
+
+const ephemeralSecretoToMessageSigner = (secret: Uint8Array): MessageSigner => {
+    // TODO: Right now we only support ephemeral accounts created from Algosdk
+    const mnemonic = algosdk.secretKeyToMnemonic(secret)
+    return new SignerUtil().addFromMnemonic(mnemonic)
+}
+
 export default class Account<T extends MessageSigner = MessageSigner> {
-    public userAddress: UserAddress
-    public chainId: SupportedChainId
-    private accountId: AccountId
-    private httpClient: HttpClient;
-    private accountClient: AccountAPIClient
+    public readonly userAddress: UserAddress
+    public readonly chainId: SupportedChainId
+    public readonly accountId: AccountId
+    private readonly httpClient: HttpClient;
+    private readonly accountClient: AccountAPIClient
     private webSocketClient: WebSocketClient
 
     // Cache
     private lastStoredDate = Date.now()
     private accountInfo: AccountInfo | null = null
+    private maxOrderExpiresOn: UnixTimestampInSeconds
+    private ephemeralMessageSigner: MessageSigner | undefined
 
     constructor(
-        private serverConfig: UrlConfig,
-        private session: AccountSession,
-        private messageSigner: T,
-        private isWebMode: boolean,
-        private helpers: {
+        private readonly serverConfig: UrlConfig,
+        private readonly session: AccountSession,
+        public readonly messageSigner: T,
+        private readonly helpers: {
             depositAlgorand: DepositFundsAlgorand,
             depositWormhole: DepositFundsWormhole,
             getSlotId: (assetId: AssetId) => Promise<InstrumentSlotId>,
@@ -181,26 +212,58 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             services: {
                 algod: Algodv2,
                 wormholeService: WormholeService
+                solanaConnection: solana.Connection
             }
         },
-        operateOn?: AccountId
+        private readonly accountConfiguration: AccountConfiguration
     ) {
         this.userAddress = this.messageSigner.address
         this.chainId = toSupportedChainId(this.messageSigner.chainId)
-        this.accountId = operateOn ?? session.accountId
+        this.accountId = this.accountConfiguration.operateOn ?? session.accountId
         if (!isValidAccountId(this.accountId)) {
             throw new Error("Invalid provided accountId: " + this.accountId)
+        }
+
+        // If the user provides the accountId and the userAddress, this must match
+        const chainUtils = CHAIN_UTILS[this.chainId]
+        if (session.accountId !== encodeAccountId(chainUtils.getPublicKey(this.userAddress), this.chainId)) {
+            throw new Error("Invalid account id received from the server")
         }
         const headers: Headers = {
             "Authorization": `Bearer ${this.session.token}`
         }
-        this.httpClient = new HttpClient(this.serverConfig.server, serverConfig.port, headers, this.isWebMode)
+        this.httpClient = new HttpClient(this.serverConfig.server, serverConfig.port, headers, this.accountConfiguration.isWebMode)
         this.accountClient = new AccountAPIClient(this.httpClient)
-        this.webSocketClient = new WebSocketClient(this.serverConfig, this.accountId, this.session.token)
+        const wsUrl = this.serverConfig.server.endsWith('/') ? `${this.serverConfig.server}ws/v1` : `${ this.serverConfig.server}/ws/v1`
+        this.webSocketClient = new WebSocketClient(wsUrl, this.accountId, this.session.token)
+
+        if (this.accountConfiguration.ephemeralKey) {
+            this.ephemeralMessageSigner = ephemeralSecretoToMessageSigner(this.accountConfiguration.ephemeralKey)
+        }
+        const expirationArrays = [defaultOrderExpiration()]
+        if (this.accountConfiguration.ephemeralExpiration) {
+            expirationArrays.push(this.accountConfiguration.ephemeralExpiration)
+        }
+        if (this.accountConfiguration.operateOnExpiration) {
+            expirationArrays.push(this.accountConfiguration.operateOnExpiration)
+        }
+        this.maxOrderExpiresOn = Math.min(...expirationArrays)
     }
 
+    private getOperationSigner = () => this.ephemeralMessageSigner ?? this.messageSigner
+
     getUserAddress = (): UserAddress => this.userAddress
-    getSession = (): AccountSession => ({ ...this.session })
+
+    getSession = (): AccountSession => ({
+        firstLogin: this.session.firstLogin,
+        accountId: this.session.accountId,
+        token: this.session.token,
+        userId: this.session.userId,
+        chainId: this.chainId,
+        encryptedEphimeralKey: this.session.encryptedEphimeralKey,
+        ephemeralAddress: this.session.ephemeralAddress,
+        ephemeralExpiration: this.session.ephemeralExpiration,
+    })
     getInfo = async () => {
         if (!this.accountInfo) {
             this.accountInfo = await this.accountClient.getOne(this.accountId)
@@ -314,9 +377,9 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         }
 
         if (funder instanceof AlgorandSigner) {
-            return this.helpers.depositAlgorand(this.accountId, this.userAddress, instrumentAmount, instrumentRepayAmount ?? InstrumentAmount.zero(instrumentAmount.instrument), funder)
-        } else if (funder instanceof EVMSigner && chainName) {
-            return this.helpers.depositWormhole(this.accountId, this.userAddress, instrumentAmount, instrumentRepayAmount ?? InstrumentAmount.zero(instrumentAmount.instrument), funder, chainName)
+            return this.helpers.depositAlgorand(this.accountId, instrumentAmount, instrumentRepayAmount ?? InstrumentAmount.zero(instrumentAmount.instrument), funder)
+        } else if ((funder instanceof EVMSigner || funder instanceof SolanaSigner) && chainName) {
+            return this.helpers.depositWormhole(this.accountId, instrumentAmount, instrumentRepayAmount ?? InstrumentAmount.zero(instrumentAmount.instrument), funder, chainName)
         }
 
         throw new Error("Invalid message signer type or no originChain provided")
@@ -344,11 +407,31 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             this.helpers.getSlotId(instrument.asaId),
         ])
 
-        // Fix types
+        /**
+         * IMPORTANT PLEASE READ:
+         * WE MUST DERIVATE THE ACCOUNT TOKEN ADDRESS DESTINATION FOR SOLANA
+         * IF WE DONT DO IT, WE ARE TAKING THE RISK OF LOSING THE FUNDS
+         * DO NOT REMOVE THIS CODE
+         */
+        let destinationAddressFixed: UserAddress = destinationAddress, solanaOwnerAddress: UserAddress | undefined = undefined
+        if (destinationChainName === "solana") {
+            const instrumentChain = instrument.chains.find(c => c.chainId === CHAIN_ID_SOLANA)
+            if (!instrumentChain)
+                throw new Error("Invalid destination chain")
+            const { tokenAccountAddress, ownerAddress } = await getAndValidateSolanaTokenAddress(
+                destinationChainName,
+                destinationAddress,
+                instrumentChain,
+                this.helpers.services.solanaConnection,
+                this.helpers.services.wormholeService
+            )
+            destinationAddressFixed = tokenAccountAddress
+            solanaOwnerAddress = ownerAddress
+        }
 
         const encodedOperation = createWithdraw(slotId, instrumentAmount.toContract(), {
             chain: destinationChainName,
-            tokenAddress: destinationAddress,
+            tokenAddress: destinationAddressFixed,
         }, instrumentMaxBorrowAmount.toContract(), instrumentMaxFeeAmount.toContract())
 
         const dataToSign = getDataToSign(encodedOperation, decodeAccountId(this.accountId), lease, lastValid)
@@ -362,7 +445,9 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             lastValid,
             maxBorrow: instrumentMaxBorrowAmount,
             maxFees: instrumentMaxFeeAmount,
-            signature, destination: { address: destinationAddress, chain: destinationChainName }
+            signature, destination: { address: destinationAddressFixed, chain: destinationChainName },
+            // The following address will be used in the BE to validate the ATA account
+            solanaOwnerAddress,
         })
 
         if (destinationChainName === "algorand" || !extraInfo.sendTransferTxId) {
@@ -386,7 +471,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         let vaaSignature: Uint8Array
         let wasRedeemed = false
 
-        const isCCTP: boolean = getWormholeDepositInfo(instrument, this.helpers.services.wormholeService.getDictionary(), destinationChainName).isCCTP
+        const { isCCTP } = getWormholeDepositInfo(instrument, this.helpers.services.wormholeService.getDictionary(), destinationChainName)
 
         const getVAASequence = async () => {
             if (!vaaSequence) {
@@ -398,35 +483,37 @@ export default class Account<T extends MessageSigner = MessageSigner> {
 
         const waitForWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
             if (!vaaSignature) {
-                vaaSignature = await this.helpers.services.wormholeService.fetchVaaEthereumSource(
-                    "algorand",
-                    BigInt(vaaSequence),
-                    retryTimeout,
-                    maxRetryCount,
-                    rpcOptions,
-                )
+                vaaSignature = await  this.helpers.services.wormholeService.fetchVaaFromSource("algorand", BigInt(vaaSequence), retryTimeout, maxRetryCount, rpcOptions)
             }
             return vaaSignature
         }
 
-        const isTransferCompleted = (provider?: Signer | providers.Provider) => {
+        const isTransferCompleted = (provider?: ethers.Signer | ethers.providers.Provider | solana.Connection) => {
             if (wasRedeemed) {
                 return Promise.resolve(true)
             }
             if (!vaaSignature) {
                 throw new Error("VAA signature is not available")
             }
-
-            if (!(this.messageSigner instanceof EVMSigner) || !provider) {
-                throw new Error("Only EVMSigner is supported for redeeming VAA")
+            if (destinationChainName === "solana") {
+                if (provider instanceof solana.Connection) {
+                    return this.helpers.services.wormholeService.isSolanaTransferComplete(provider, vaaSignature)
+                } else if (this.messageSigner instanceof SolanaSigner && this.messageSigner.connection) {
+                    return this.helpers.services.wormholeService.isSolanaTransferComplete(this.messageSigner.connection, vaaSignature)
+                }
+            } else if (isEVMChain(destinationChainName)) {
+                if (provider instanceof ethers.Signer || provider instanceof ethers.providers.Provider) {
+                    return this.helpers.services.wormholeService.isEthereumTransferComplete(provider, vaaSignature, destinationChainName)
+                } else if (this.messageSigner instanceof EVMSigner) {
+                    return this.helpers.services.wormholeService.isEthereumTransferComplete(this.messageSigner.getSigner(), vaaSignature, destinationChainName)
+                }
             }
-
-            const ethersProvider = provider ?? this.messageSigner.getSigner()
-
-            return this.helpers.services.wormholeService.isEthereumTransferComplete(ethersProvider, vaaSignature, destinationChainName)
+            throw new Error("Unsupported chain")
         }
 
-        const redeemWormholeVAA = async (signer?: Signer, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+        // TODO: First argument must be generic for EVM and Solana
+        const redeemWormholeVAA = async (ethersSigner?: ethers.Signer, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+
             if (isCCTP) {
                 console.warn("Ignoring redeemAndSubmitWormholeVAA for CCTP")
                 // TODO: Handle this in a better way
@@ -438,22 +525,37 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             if (!vaaSignature) {
                 await waitForWormholeVAA(retryTimeout, maxRetryCount, rpcOptions)
             }
-            const evmSigner = signer ? signer : this.messageSigner instanceof EVMSigner ? this.messageSigner.getSigner() : undefined
-            if (!evmSigner) {
-                throw new Error("Only EVMSigner is supported for redeeming VAA")
-            }
-            const overrides = {
-                gasLimit: 1000000,
-            }
+
             const instrumentChain = instrument.chains.find((c) => c.chainId === toChainId(destinationChainName))
             const xAsset: XContractAddress = { chain: destinationChainName, tokenAddress: instrumentChain!.tokenAddress }
-            const contractReceip = await this.helpers.services.wormholeService.createWormholeTxForEthereumRedeem(xAsset, vaaSignature, evmSigner, overrides)
-            if (contractReceip.status && contractReceip.status !== 0) {
-                wasRedeemed = true
-                return contractReceip
-            }
 
-            throw new Error("VAA redeem failed")
+            if (this.messageSigner instanceof EVMSigner) {
+                const overrides = {
+                    gasLimit: 1000000,
+                }
+                const concreteSigner = ethersSigner ?? this.messageSigner.getSigner() 
+                const contractReceip = await this.helpers.  services.wormholeService.createWormholeTxForEthereumRedeem(xAsset, vaaSignature, concreteSigner, overrides)
+                if (contractReceip.status && contractReceip.status !== 0) {
+                    wasRedeemed = true
+                    return contractReceip
+                }                
+            } else if (this.messageSigner instanceof SolanaSigner) {
+                if (!this.messageSigner.connection) {
+                    throw new Error("Solana signer requires a connection")
+                }
+                // Try to create the solana token account
+                await this.helpers.services.wormholeService.createSolanaAtaAccount(
+                    this.messageSigner.connection,
+                    new solana.PublicKey(destinationAddressFixed),
+                    new solana.PublicKey(this.messageSigner.address),
+                    this.messageSigner.signTransaction,
+                    new solana.PublicKey(instrumentChain!.tokenAddress)
+                )
+                const transaction = await this.helpers.services.wormholeService.createWormholeTxForSolanaRedeem(xAsset, vaaSignature, this.messageSigner.connection, this.messageSigner.publickey, this.messageSigner.signTransaction)
+                wasRedeemed = true
+                return transaction
+            }
+            throw new Error("VAA redeem failed. Unsupported signer type")
         }
 
         const result: WormholeWithdrawResult = {
@@ -558,7 +660,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
 
         const dataToSign = getDataToSign(encodedOperation, decodeAccountId(this.accountId), lease, lastValid)
 
-        const signature = await this.messageSigner.signMessage(dataToSign)
+        const signature = await this.getOperationSigner().signMessage(dataToSign)
 
         const result = await this.accountClient.submitLiquidation(this.accountId, {
             target: liquidatee,
@@ -596,7 +698,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         return await this.accountClient.submitNewOrders(this.accountId, marketId, newOrders)
     }
 
-    private async createOrderData(marketInfo: MarketInfo, side: "buy" | "sell", type: "limit" | "market", amount: string, price: string | undefined, maxBorrow: string | undefined, maxRepay: string | undefined, expiresOn: number | undefined, clientOrderId: string | undefined) {
+    private async createOrderData(marketInfo: MarketInfo, side: "buy" | "sell", type: "limit" | "market", amount: string, price?: string, maxBorrow?: string, maxRepay?: string, expiresOn: number = defaultOrderExpiration(), clientOrderId?: string) {
         const [maxBorrowInstrument, maxRepayInstrument] = side === "buy" ? [marketInfo.quoteInstrument, marketInfo.baseInstrument] : [marketInfo.baseInstrument, marketInfo.quoteInstrument]
         // @ts-expect-error Type is not assignable to market and limit. price is checked just in case
         const order: Order = {
@@ -610,7 +712,8 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             price: price && type === "limit" ? MarketPrice.fromDecimal(marketInfo, price) : undefined,
             maxBorrow: InstrumentAmount.fromDecimal(maxBorrowInstrument, maxBorrow ?? "0"),
             maxRepay: InstrumentAmount.fromDecimal(maxRepayInstrument, maxRepay ?? "0"),
-            expiresOn: expiresOn ?? createGTDExpiration(),
+            // We are using the minimum between the expiration of the order and the expiration of the session
+            expiresOn: Math.min(expiresOn, this.maxOrderExpiresOn),
             clientOrderId
         }
         const now = Date.now()
@@ -652,7 +755,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
                 maxBuyAmountToPool: maxRepay?.toContract() || BigInt(0),
                 nonce: orderNonce,
                 expiresOn,
-            }, this.messageSigner, clientOrderId)
+            }, this.getOperationSigner(), clientOrderId)
         }
         const getBuySellAmounts =  (order: Order):[sellAmount: InstrumentAmount, buyAmount: InstrumentAmount] => {
             if(order.type === "market") {
@@ -680,7 +783,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             sentTime: now,
             settlementTicket: {
                 ...signedOrderData.data,
-                creator: signedOrderData.creator,
+                creator: this.messageSigner.address,
                 signature: signedOrderData.signature
             }
         }
@@ -690,34 +793,34 @@ export default class Account<T extends MessageSigner = MessageSigner> {
     cancelOrder = async (order: OrderId | OrderId[]) => {
         const orders = Array.isArray(order) ? order : [order]
         const { signature } = await signCancelOrders({
-            creator: this.userAddress,
-            user: this.accountId,
+            creator: this.messageSigner.address,
+            accountId: this.accountId,
             orders,
-        }, this.messageSigner.signMessage)
+        }, this.getOperationSigner().signMessage)
 
         return this.accountClient.cancelOrders(this.accountId, orders, signature, this.userAddress)
     }
 
-    cancelAllOrders = async () => {
+    cancelAllOrders = async (creator?: UserAddress) => {
         const now = Date.now()
         const signedCancelRequest = await signCancelOrders({
-            creator: this.userAddress,
-            user: this.accountId,
+            creator,
+            accountId: this.accountId,
             allOrdersUntil: now,
-        }, this.messageSigner.signMessage)
+        }, this.getOperationSigner().signMessage)
 
-        return await this.accountClient.cancelAllOrders(signedCancelRequest.user, signedCancelRequest.signature, signedCancelRequest.allOrdersUntil!, signedCancelRequest.creator)
+        return await this.accountClient.cancelAllOrders(signedCancelRequest.accountId, signedCancelRequest.signature, signedCancelRequest.allOrdersUntil!, signedCancelRequest.creator)
     }
 
-    cancelAllOrdersByMarket = async (marketId : MarketId) => {
+    cancelAllOrdersByMarket = async (marketId : MarketId, creator?: UserAddress) => {
         const now = Date.now()
         const signedCancelRequest = await signCancelOrders({
-            creator: this.userAddress,
-            user: this.accountId,
+            creator,
+            accountId: this.accountId,
             allOrdersUntil: now,
-        }, this.messageSigner.signMessage)
+        }, this.getOperationSigner().signMessage)
 
-        return await this.accountClient.cancelAllOrdersByMarket(signedCancelRequest.user, marketId, signedCancelRequest.signature, signedCancelRequest.allOrdersUntil!, signedCancelRequest.creator)
+        return await this.accountClient.cancelAllOrdersByMarket(signedCancelRequest.accountId, marketId, signedCancelRequest.signature, signedCancelRequest.allOrdersUntil!, signedCancelRequest.creator)
     }
 
     logout = async () => this.httpClient.post("/v1/logout")
@@ -746,7 +849,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
 
         const dataToSign = getDataToSign(encodedOperation, decodeAccountId(this.accountId), lease, lastValid)
 
-        const signature = await this.messageSigner.signMessage(dataToSign)
+        const signature = await this.getOperationSigner().signMessage(dataToSign)
 
         return { signature, lease, lastValid }
     }
@@ -765,11 +868,10 @@ export default class Account<T extends MessageSigner = MessageSigner> {
 
     public addNewDelegation = async (delegateTo: UserAddress, name: string, expiresOn: UnixTimestampInSeconds) => {
         const nonce = Date.now()
-        const encodedOperation = createDelegation(delegateTo, nonce, expiresOn)
-        const dataToSign = getDataToSign(encodedOperation, decodeAccountId(this.accountId), new Uint8Array(32), 0)
+        const { dataToSign } = buildDelegationOperation(this.userAddress, delegateTo, expiresOn, nonce)
         const signature = await this.messageSigner.signMessage(dataToSign)
 
-        return this.accountClient.submitNewDelegation(this.accountId, encodeAccountId(getPublicKeyByAddress(delegateTo)), name, nonce, expiresOn, signature)
+        return this.accountClient.submitNewDelegation(this.accountId, userAddressToAccountId(delegateTo), name, nonce, expiresOn, signature)
     }
 }
 

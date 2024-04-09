@@ -1,7 +1,7 @@
 import "mocha"
 import { expect } from "chai"
 import * as Parsers from "../src/tools/parser"
-import { AccountOperationType, GranularityResolution, NewOrderDataRequest, OperationStatus, SUPPORTED_CHAIN_IDS } from "../src"
+import { AccountOperationType, EphemeralSession, GranularityResolution, NewOrderDataRequest, OperationStatus, SUPPORTED_CHAIN_IDS } from "../src"
 
 describe("Parser tests", () => {
     it("Should parse a string", () => {
@@ -114,7 +114,7 @@ describe("Parser tests", () => {
             expect(parseUserAddress(undefined, userAddress), userAddresses + " with undefined").to.be.equal(userAddress)
             expect(parseUserAddress(undefined, undefined, true), userAddresses + " with undefined and optional").to.be.undefined
             expect(parseUserAddress(undefined, userAddress, true), userAddresses + " with undefined, optional and default value").to.be.equal(userAddress)
-            expect(() => parseUserAddress("TEST"), userAddresses + " with invalid string").to.throw()
+            expect(() => parseUserAddress("TEST", undefined, false, true), userAddresses + " with invalid string").to.throw()
         }
     })
     it("Should parse granularity name", () => {
@@ -133,7 +133,7 @@ describe("Parser tests", () => {
         for (const chainId of chainIds) {
             expect(parseChainId(chainId), chainIds + " with value").to.be.equal(chainId)
             expect(() => parseChainId(500000000), chainIds + " with number").to.throw()
-            expect(() => parseChainId(BigInt(5)), chainIds + " with BIGnumber").to.throw()
+            expect(parseChainId(BigInt(chainId)), chainIds + " with BIGnumber").to.be.equal(chainId)
             expect(parseChainId(undefined, chainId), chainIds + " with undefined").to.be.equal(chainId)
             expect(() => parseChainId("TEST"), chainIds + " with invalid string").to.throw()
             expect(parseChainId(undefined, undefined, true), "with undefined and optional").to.be.undefined
@@ -200,5 +200,14 @@ describe("Parser tests", () => {
         expect(() => parseNewOrderRequest({ ...request, settlementTicket: { ...request.settlementTicket, sellAmount: -5 }},"34KFG6YWFDFK7CXNKNZEKOJFFVB2KCWHHI5POJNDHHKEMMKDESFQPYH5W4")).to.throw()
         expect(() => parseNewOrderRequest({ ...request, settlementTicket: { ...request.settlementTicket, maxSellAmountFromPool: "AA" }},"34KFG6YWFDFK7CXNKNZEKOJFFVB2KCWHHI5POJNDHHKEMMKDESFQPYH5W4")).to.throw()
         expect(() => parseNewOrderRequest({ ...request, settlementTicket: { ...request.settlementTicket, maxBuyAmountToPool: "-5" }},"34KFG6YWFDFK7CXNKNZEKOJFFVB2KCWHHI5POJNDHHKEMMKDESFQPYH5W4")).to.throw()
+    })
+
+    it("Should parse a ephemeral session", () => {
+        const ephemeralSession: EphemeralSession = {
+            address: "34KFG6YWFDFK7CXNKNZEKOJFFVB2KCWHHI5POJNDHHKEMMKDESFQPYH5W4",
+            expiresOn: 1689177881,
+            signature: "mR5Z/8VyfCgu",
+        }
+        expect(() => Parsers.parseEphemeralSession(ephemeralSession)).to.not.throw()
     })
 })

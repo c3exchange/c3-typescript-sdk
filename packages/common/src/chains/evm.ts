@@ -28,10 +28,10 @@ export function getEthereumAddressByPublicKey (publicKeyAddress: Uint8Array): Us
         ethAddress = publicKeyToString(publicKeyAddress)
     } else {
         throw new Error("Ethereum address must have 20 bytes length")
-    }
-    if (ethers.utils.isAddress(ethAddress)) {
-        return ethAddress
-    } else {
+    }    
+    try {
+        return getEthereumAddressWithChecksum(ethAddress)
+    } catch {
         throw new Error("Invalid address type")
     }
 }
@@ -45,4 +45,24 @@ export function verifyEthereumSignature (signature: Signature|RawSignature, data
 
 export function isValidEVMTxHash (txHash: string): boolean {
     return ethers.utils.isHexString(txHash, 32)
+}
+
+export function isValidEthereumAddress(address: string, strict = false): boolean {
+    // We need to ensure the address contains the checksum
+    try {
+        const addressWithChecksum = getEthereumAddressWithChecksum(address)
+        if (strict) {
+            return address === addressWithChecksum
+        }
+        return address.toLowerCase() === addressWithChecksum.toLocaleLowerCase()
+    } catch (error) { }
+    return false;    
+}
+
+export function toValidEthereumAddress(address: string): UserAddress {
+    return getEthereumAddressWithChecksum(address)
+}
+
+function getEthereumAddressWithChecksum(address: string): string {
+    return ethers.utils.getAddress(address)
 }

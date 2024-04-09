@@ -26,6 +26,19 @@ interface InstrumentRiskParameters {
     optUtilization: PercentageAmount
 }
 
+interface LiquidationPrice {
+    price: UsdPrice
+    borrowPremiumPrice: UsdPrice
+    lendDiscountPrice: UsdPrice
+    cashDiscountPrice: UsdPrice
+}
+
+interface LiquidationPosition {
+    amount: InstrumentAmount
+    priceInUsd: UsdPrice
+    liquidationPriceInUsd: UsdPrice
+}
+
 interface InstrumentWithRiskParameters extends Instrument {
     riskParameters: InstrumentRiskParameters
 }
@@ -93,5 +106,7 @@ export type {
     RiskParameters,
     PoolParameters,
     InstrumentRiskParameters,
-    Margin
+    Margin,
+    LiquidationPrice,
+    LiquidationPosition
 }

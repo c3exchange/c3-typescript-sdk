@@ -14,13 +14,16 @@ import {
     redeemOnEthNative,
     transferFromAlgorand,
     transferFromEth,
-    transferFromEthNative
+    transferFromEthNative,
+    getIsTransferCompletedSolana
 } from "@certusone/wormhole-sdk/lib/cjs/token_bridge";
 import {
     getEmitterAddressAlgorand,
     getEmitterAddressEth,
+    getEmitterAddressSolana,
     parseSequenceFromLogAlgorand,
     parseSequenceFromLogEth,
+    parseSequenceFromLogSolana
 } from "@certusone/wormhole-sdk/lib/cjs/bridge"
 import { TransactionSignerPair } from '@certusone/wormhole-sdk/lib/cjs/algorand';
 import { getGovernorIsVAAEnqueuedWithRetry, getSignedVAAWithRetry } from "@certusone/wormhole-sdk/lib/cjs/rpc"
@@ -35,7 +38,7 @@ import {
     AlgorandChainName,
     CONTRACTS,
     coalesceChainName,
-    CHAIN_ID_AVAX
+    SolanaChainName,
 } from "./constants";
 import {
     ChainName,
@@ -49,24 +52,38 @@ import { WormholeDictionary } from "./dictionary";
 import { encodeUint16, getAlgorandIdAsString, toBigInt, zeroPadBytes } from "../utils";
 import { getPublicKeyByAddress } from "../chains";
 import { CircleIntegration } from "./circle";
-import { tryNativeToUint8Array } from "@certusone/wormhole-sdk/lib/cjs/utils/array";
+import { tryHexToNativeString, tryNativeToUint8Array, tryUint8ArrayToNative } from "@certusone/wormhole-sdk/lib/cjs/utils/array";
+import { Connection, PublicKey, PublicKeyInitData, SendTransactionError, Transaction, TransactionResponse, TransactionSignature, VersionedTransactionResponse } from "@solana/web3.js";
+import { createAssociatedTokenAccountInstruction, getAssociatedTokenAddress, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import type { SolanaSignTxCallback } from "../tools";
+import { custom_postVaaWithRetry, custom_redeemOnSolana, custom_transferFromSolana, custom_transferNativeSol } from "./internal/wrappedSolanaTokenBridge";
+import { addPriorityFees } from "../internal";
 
 export interface WormholeService {
     getMirrorAsset(xAsset: XAssetId, dest: ChainName, provider?: ethers.providers.Provider | ethers.Signer): Promise<XAssetId>
     createWormholeTxForEthereumRedeem(sender: XRecipientId, vaa: Uint8Array, signer: Signer, overrides?: ethers.Overrides): Promise<ContractReceipt>
+    createWormholeTxForSolanaRedeem(asset: XAssetId, signedVAA: Uint8Array, connection: Connection, payerAccount: PublicKey, signCallback: SolanaSignTxCallback, postVaaMaxRetries?: number, multiplier?: number, maxPriorityFeeCap?: number, minPriorityFee?: number): Promise<string>
     redeemOnAlgorand(sender: XRecipientId, vaa: Uint8Array): Promise<TransactionSignerPair[]>
     createWormholeTxForEvmNetworkDeposit(toAddress: XRecipientId, asset: XAssetId, amount: BigNumberish, repayAmount: bigint, signer: Signer, receiver: string, overrides?: PayableOverrides): Promise<ContractReceipt>
     createWormholeTxForEvmNetworkDeposit_CCTP(toAddress: XRecipientId, asset: XAssetId, amount: BigNumberish, repayAmount: bigint, signer: Signer, receiver: string, hubAddress: string, overrides?: PayableOverrides): Promise<ContractReceipt>
     createWormholeTxForAlgorandNetworkWithdraw(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, optionalArgs?: any) : Promise<TransactionSignerPair[]>
     createWormholeTxForAlgorandNetworkWithdraw_CCTP(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, hubAddress: string, optionalArgs?: any) : Promise<TransactionSignerPair[]>
-    fetchVaaEthereumSource(evmSourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<Uint8Array>
+    createWormholeTxForSolanaNetworkDeposit(connection: Connection, publicKey: PublicKey, signCallback: SolanaSignTxCallback, toAddress: XRecipientId, asset: XAssetId, amount: bigint, repayAmount: bigint, receiver: string): Promise<TransactionSignature>
+    // createWormholeTxForSolanaNetworkDeposit_CCTP(connection: Connection, keypair: Keypair, toAddress: XRecipientId, asset: XAssetId, amount: bigint, repayAmount: bigint, receiver: string): Promise<Transaction>
+    fetchVaaFromSource(evmSourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<Uint8Array>
     getWormholeVaaSequenceFromEthereumTx(chain: ChainName,txReceipt: ethers.ContractReceipt ) : string
     getWormholeVaaSequenceFromAlgorandTx (txId: string): Promise<string>
+    getWormholeVaaSequenceFromSolanaTx(transactionResponse: TransactionResponse | VersionedTransactionResponse): Promise<string>
     getDictionary() : WormholeDictionary
     isEthereumTransferComplete (signer: ethers.Signer | ethers.providers.Provider, signedVAA: Uint8Array, evmDestChain: ChainName): Promise<boolean>
     isAlgorandTransferComplete (signedVAA: Uint8Array): Promise<boolean>
+    isSolanaTransferComplete(connection: Connection, signedVAA: Uint8Array): Promise<boolean>
     getNetwork(): WormholeNetwork
-    isVaaEnqueuedEthereumSource(evmSourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<boolean>
+    isVaaEnqueued(sourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<boolean>
+    createSolanaAtaAccount(connection: Connection, associatedTokenAddress: PublicKey, ownerPublicKey: PublicKey, ownerSignCallback: SolanaSignTxCallback, mint: PublicKey): Promise<string | undefined>
+    solanaAtaExistsFromOwner(connection: Connection, ownerAddr: string, tokenAddress: string): Promise<boolean>
+    getSolanaAssociatedTokenAddress(xAsset: XContractAddress, owner: XContractAddress): Promise<PublicKey>
+    getSolanaAssociatedTokenAddressRaw(mint: PublicKeyInitData, owner: PublicKeyInitData): PublicKey
 }
 
 //TODO: Would like to depend on an interface here so we can mock Wormhole in tests
@@ -86,9 +103,6 @@ export class WormholeServiceImpl implements WormholeService {
     }
 
     buildDepositCallData(asset: XAssetId, toAddress: XRecipientId, repayAmount: bigint, receiver: string, sender: string) : { payload: Buffer, recipient: XRecipientId } {
-
-        if( !isEVMChain(asset.chain) )
-            throw new Error(` ${asset.chain} is Not an EVM Chain, cant create Deposit with Ether.js`);
 
         if(toAddress.chain != AlgorandChainName)
             throw new Error(`${toAddress.chain} should be ${AlgorandChainName}`)
@@ -153,6 +167,66 @@ export class WormholeServiceImpl implements WormholeService {
         return tx
     }
 
+    public async createWormholeTxForSolanaNetworkDeposit(
+        connection: Connection,
+        publicKey: PublicKey,
+        signCallback: SolanaSignTxCallback,
+        toAddress: XRecipientId,
+        asset: XAssetId,
+        amount: bigint,
+        repayAmount: bigint,
+        receiver: string): Promise<TransactionSignature> {
+
+        const relayerFee = BigInt(0);
+
+        const { payload, recipient } = this.buildDepositCallData(asset, toAddress, repayAmount, receiver, publicKey.toString())
+        let tx: Transaction
+        const tokenBridgeAddress = this.dictionary.getTokenBridgeContractAddress(SolanaChainName);
+        const bridgeAddress = this.dictionary.getCoreContractAddress(SolanaChainName);
+
+        if (this.dictionary.isWrappedCurrency(asset)) {
+            tx = await custom_transferNativeSol(
+                connection,
+                bridgeAddress.tokenAddress,
+                tokenBridgeAddress.tokenAddress,
+                publicKey,
+                amount,
+                Buffer.from(recipient.tokenAddress, 'hex'),
+                toChainId(recipient.chain),
+                relayerFee,
+                payload)
+        } else {
+            const tokenAddress = await getAssociatedTokenAddress(new PublicKey(asset.tokenAddress), publicKey)
+
+            tx = await custom_transferFromSolana(
+                connection,
+                bridgeAddress.tokenAddress,
+                tokenBridgeAddress.tokenAddress,
+                publicKey,
+                tokenAddress.toString(),
+                asset.tokenAddress,
+                amount,
+                Buffer.from(recipient.tokenAddress, 'hex'),
+                toChainId(recipient.chain),
+                undefined, // originChain
+                undefined, // originAddress
+                undefined, // fromOwnerAddress
+                relayerFee, // zero relayer fee
+                payload)
+        }
+
+        const signedTx = await signCallback(tx)
+        const txn = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 50 })
+        const latestBlockHash = await connection.getLatestBlockhash();
+        await connection.confirmTransaction({
+            signature: txn,
+            blockhash: latestBlockHash.blockhash,
+            lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+        })
+
+        return txn
+    }
+
     public async createWormholeTxForEvmNetworkDeposit_CCTP(
         toAddress: XRecipientId,
         asset: XAssetId,
@@ -185,8 +259,12 @@ export class WormholeServiceImpl implements WormholeService {
         return transferTx.wait()
     }
 
-    public async createWormholeTxForAlgorandNetworkWithdraw(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, optionalArgs?: any) : Promise<TransactionSignerPair[]> {
 
+    public async createWormholeTxForAlgorandNetworkWithdraw(fromXAddress: XRecipientId, toXAddress: XRecipientId, xAsset: XContractAddress, amount: bigint, fee: bigint, optionalArgs?: any) : Promise<TransactionSignerPair[]> {
+        
+        // (!) If going to Solana, get the Associated Token Account for the destination address,
+        //     not the Wallet address which WONT work
+        
         if(xAsset.chain != fromXAddress.chain ){
             throw  new Error(`Source asset chain ${xAsset.chain} should match from Account chain ${fromXAddress.chain} `);
         }
@@ -194,6 +272,7 @@ export class WormholeServiceImpl implements WormholeService {
         if(fromXAddress.chain !== AlgorandChainName)
             throw  new Error(`Source Address needs to be ${AlgorandChainName} `);
 
+        
         const whTokenBridgeAppId = toBigInt(this.dictionary.getTokenBridgeAppId());
         const whCoreAppId = toBigInt(this.dictionary.getCoreAppId());
         const assetId = BigInt(xAsset.tokenAddress)
@@ -261,6 +340,10 @@ export class WormholeServiceImpl implements WormholeService {
         return parseSequenceFromLogAlgorand(pendingTxInfo)
     }
 
+    public async getWormholeVaaSequenceFromSolanaTx (transactionResponse: TransactionResponse | VersionedTransactionResponse): Promise<string> {
+        return parseSequenceFromLogSolana(transactionResponse)
+    }
+
     /**
      * Returns the mirrored asset for a given destination chain.
      * @param xAsset The asset to query for. It's chain must be different from the destination chain.
@@ -295,7 +378,7 @@ export class WormholeServiceImpl implements WormholeService {
             const asaId  = BigInt(xAsset.tokenAddress);
             const wrapInfo = await getOriginalAssetAlgorand(this.algodClient, toBigInt(this.dictionary.getTokenBridgeAppId()), asaId)
             if (wrapInfo.chainId === toChainId(dest)) {
-                const tokenAddress = '0x' + ethers.utils.hexlify(wrapInfo.assetAddress).slice(26);
+                const tokenAddress = tryUint8ArrayToNative(wrapInfo.assetAddress, dest)
                 return {
                     tokenAddress,
                     chain: dest
@@ -322,7 +405,6 @@ export class WormholeServiceImpl implements WormholeService {
                         chain: dest
                     }
                 }
-                throw new Error("There is no mapped token for such ASA ID")
             }
         }
 
@@ -330,18 +412,29 @@ export class WormholeServiceImpl implements WormholeService {
 
     }
 
-    public  async fetchVaaEthereumSource(evmSourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<Uint8Array> {
+    public async fetchVaaFromSource (sourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<Uint8Array> {
         const hosts = WORMHOLE_RPC_HOSTS[this.wormholeEnvironment.WormholeNetwork] ?? [];
-        const tokenBridgeAddress : XContractAddress = this.dictionary.getTokenBridgeContractAddress(evmSourceChain);
-        const emitterAddress = isEVMChain(evmSourceChain) ? getEmitterAddressEth(this.dictionary.getTokenBridgeContractAddress(evmSourceChain).tokenAddress)
-                : evmSourceChain === AlgorandChainName ? getEmitterAddressAlgorand(BigInt(tokenBridgeAddress.tokenAddress)) : '0';
-        const { vaaBytes } = await getSignedVAAWithRetry(hosts,
-            evmSourceChain,
+        const tokenBridgeAddress : XContractAddress = this.dictionary.getTokenBridgeContractAddress(sourceChain);
+        let emitterAddress
+        if (isEVMChain(sourceChain)) {
+            emitterAddress = getEmitterAddressEth(this.dictionary.getTokenBridgeContractAddress(sourceChain).tokenAddress)
+        } else if (sourceChain === SolanaChainName) {
+            emitterAddress = getEmitterAddressSolana(this.dictionary.getTokenBridgeContractAddress(sourceChain).tokenAddress)
+        } else if (sourceChain === AlgorandChainName) {
+            emitterAddress = getEmitterAddressAlgorand(BigInt(tokenBridgeAddress.tokenAddress))
+        } else {
+            throw new Error(`fetchVaaFromSource: Chain ${sourceChain} is not supported`)
+        }
+
+        const { vaaBytes } = await getSignedVAAWithRetry(
+            hosts,
+            sourceChain,
             emitterAddress,
             vaaSequence.toString(),
             rpcOptions,
             retryTimeout,
-            maxRetryCount)
+            maxRetryCount
+        )
         return vaaBytes
     }
 
@@ -353,6 +446,50 @@ export class WormholeServiceImpl implements WormholeService {
             return await redeemOnEthNative(bridgeAddress.tokenAddress, signer, signedVAA, overrides)
         }
         return await redeemOnEth(bridgeAddress.tokenAddress, signer, signedVAA, overrides)
+    }
+
+
+    public async createWormholeTxForSolanaRedeem(asset: XAssetId, signedVAA: Uint8Array, connection: Connection, payerAccount: PublicKey, signCallback: SolanaSignTxCallback<Transaction>, postVaaMaxRetries?: number, multiplier?: number, maxPriorityFeeCap?: number, minPriorityFee?: number):  Promise<string>
+    {
+        // const isNativeSol = this.dictionary.isWrappedCurrency(asset);
+        const bridgeAddress = this.dictionary.getCoreContractAddress(SolanaChainName);
+        const tokenBridgeAddress = this.dictionary.getTokenBridgeContractAddress(SolanaChainName);
+
+        const feeRecipientTokenAccount = this.getSolanaAssociatedTokenAddressRaw(new PublicKey(asset.tokenAddress), payerAccount).toString()
+
+        // If we want to retry a redeem, e.g from the relayer, the postVaaSolanawithRetry will
+        // fail with account 'already in use' if it was already called before , so we handle that here.
+        // This is a shortcoming of the old Wormhole SDK.
+
+        try {
+            await custom_postVaaWithRetry(connection, signCallback, payerAccount, new PublicKey(bridgeAddress.tokenAddress), Buffer.from(signedVAA), postVaaMaxRetries, "finalized", multiplier, maxPriorityFeeCap, minPriorityFee)
+        } catch (error) {
+            if (error instanceof SendTransactionError && error.logs?.includes("Program log: Instruction: LegacyPostVaa") && error.logs?.includes("already in use")) {
+                console.warn(`createWormholeTxForSolanaRedeem: LegacyPostVaa already called for VAA ${Buffer.from(signedVAA).toString('hex')}, skipping`)
+            } else {
+                throw error;
+            }
+        }
+        
+        /**
+         * IMPORTANT, `redeemAndUnwrapOnSolana` IS NOT WORKING, DO NOT USE IT!!
+         * Temporal solution is to use `redeemOnSolana` to transfer the native token to the recipient.
+         */
+        // const tx = isNativeSol ?
+        //     (await redeemAndUnwrapOnSolana(connection, 
+        //         bridgeAddress.tokenAddress,
+        //         tokenBridgeAddress.tokenAddress, 
+        //         payerAccount.toString(), signedVAA, "finalized", feeRecipientTokenAccount)) 
+        //         : 
+        //         (await redeemOnSolana(connection, 
+        //             bridgeAddress.tokenAddress, 
+        //             tokenBridgeAddress.tokenAddress, 
+        //             payerAccount.toString(), signedVAA, feeRecipientTokenAccount, "finalized"))
+
+        const tx = await custom_redeemOnSolana(connection, bridgeAddress.tokenAddress, tokenBridgeAddress.tokenAddress, payerAccount.toString(), signedVAA, feeRecipientTokenAccount, "finalized", multiplier, maxPriorityFeeCap, minPriorityFee)
+        const signedTx = await signCallback(tx)
+        const txn = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 50 })
+        return txn
     }
 
     public  async redeemOnAlgorand(asset: XAssetId, vaa: Uint8Array): Promise<TransactionSignerPair[]>{
@@ -377,13 +514,27 @@ export class WormholeServiceImpl implements WormholeService {
         )
     }
 
-    public async isVaaEnqueuedEthereumSource(evmSourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<boolean> {
+    public async isSolanaTransferComplete(connection: Connection, signedVAA: Uint8Array): Promise<boolean> {
+        return await getIsTransferCompletedSolana(this.dictionary.getTokenBridgeContractAddress(SolanaChainName).tokenAddress, signedVAA, connection)
+    }
+
+    public async isVaaEnqueued(sourceChain: ChainName, vaaSequence: bigint, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>): Promise<boolean> {
         const hosts = WORMHOLE_RPC_HOSTS[this.wormholeEnvironment.WormholeNetwork] ?? [];
-        const tokenBridgeAddress: XContractAddress = this.dictionary.getTokenBridgeContractAddress(evmSourceChain);
-        const emitterAddress = isEVMChain(evmSourceChain) ? getEmitterAddressEth(this.dictionary.getTokenBridgeContractAddress(evmSourceChain).tokenAddress)
-            : evmSourceChain === AlgorandChainName ? getEmitterAddressAlgorand(BigInt(tokenBridgeAddress.tokenAddress)) : '0';
+        const tokenBridgeAddress: XContractAddress = this.dictionary.getTokenBridgeContractAddress(sourceChain);
+
+        let emitterAddress
+        if (isEVMChain(sourceChain)) {
+            emitterAddress = getEmitterAddressEth(this.dictionary.getTokenBridgeContractAddress(sourceChain).tokenAddress)
+        } else if (sourceChain === SolanaChainName) {
+            emitterAddress = getEmitterAddressSolana(this.dictionary.getTokenBridgeContractAddress(sourceChain).tokenAddress)
+        } else if (sourceChain === AlgorandChainName) {
+            emitterAddress = getEmitterAddressAlgorand(BigInt(tokenBridgeAddress.tokenAddress))
+        } else {
+            throw new Error(`isVaaEnqueued: Chain ${sourceChain} is not supported`)
+        }
+
         const response = await getGovernorIsVAAEnqueuedWithRetry(hosts,
-            evmSourceChain,
+            sourceChain,
             emitterAddress,
             vaaSequence.toString(),
             rpcOptions,
@@ -392,4 +543,59 @@ export class WormholeServiceImpl implements WormholeService {
         return response.isEnqueued
     }
 
+
+    /**
+     * Gets the ATA Address for a specific token and owner tuple.
+     * 
+     * @param asa The token to get the ATA for.
+     * @param owner The owner of the ATA.  This must be a Solana address enconded in hex (not base58 string)
+     * @returns The associated token address for the owner.
+     */
+    public async getSolanaAssociatedTokenAddress(asa: XContractAddress, owner: XContractAddress) {
+        const tokenProgram = await this.getMirrorAsset(asa, SolanaChainName)
+        const associatedTokenAddress = getAssociatedTokenAddressSync(
+            new PublicKey(tokenProgram.tokenAddress),
+            new PublicKey(tryHexToNativeString(owner.tokenAddress, SolanaChainName)))
+        return associatedTokenAddress
+    }
+
+    getSolanaAssociatedTokenAddressRaw(mint: PublicKeyInitData, owner: PublicKeyInitData): PublicKey {
+        return getAssociatedTokenAddressSync(new PublicKey(mint), new PublicKey(owner))
+    }
+
+    public async solanaAtaExistsFromOwner(connection: Connection, ownerAddress: string, tokenAddress: string): Promise<boolean> {
+        const associatedTokenAddress = this.getSolanaAssociatedTokenAddressRaw(tokenAddress, ownerAddress)
+        const associatedAddressInfo = await connection.getAccountInfo(associatedTokenAddress)
+        return !!associatedAddressInfo
+    }
+
+    public async createSolanaAtaAccount(connection: Connection, associatedTokenAddress: PublicKey, ownerPublicKey: PublicKey, ownerSignCallback: SolanaSignTxCallback, mint: PublicKey): Promise<string | undefined> {
+        const associatedAddressInfo = await connection.getAccountInfo(associatedTokenAddress)
+        if (!associatedAddressInfo) {
+            const tx = new Transaction().add(
+                createAssociatedTokenAccountInstruction(
+                    ownerPublicKey, // payer
+                    associatedTokenAddress, // associated token address
+                    ownerPublicKey, // owner
+                    mint
+                )
+            );
+            const { blockhash } = await connection.getLatestBlockhash()
+            tx.recentBlockhash = blockhash
+            tx.feePayer = ownerPublicKey
+            await addPriorityFees(connection, tx, 1.25)
+            const signedTx = await ownerSignCallback(tx)
+            const signature = await connection.sendRawTransaction(signedTx.serialize(), { maxRetries: 50 })
+
+            const latestBlockHash = await connection.getLatestBlockhash();
+
+            await connection.confirmTransaction({
+                blockhash: latestBlockHash.blockhash,
+                lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+                signature,
+            });
+
+            return signature
+        }
+    }
 }
