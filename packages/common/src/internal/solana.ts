@@ -5,6 +5,10 @@ import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAccount } from "@solana/spl
 // The default microLamports per compute unit if the prioritization fees are not available or zero
 const MIN_DEFAULT_PRIORITY_FEE = 5000
 
+// The default network compute unit (CU) limit
+const DEFAULT_COMPUTE_UNIT_LIMIT = 200000
+
+
 export async function getAndValidateSolanaTokenAddress(
     destinationChainName: ChainName,
     destinationAddress: UserAddress,
@@ -58,7 +62,7 @@ export async function getSolanaFees (connection: Connection, lockedWritableAccou
     return Math.floor( (filteredFees[filteredFees.length - 1] || MIN_DEFAULT_PRIORITY_FEE) * multiplier)
 }
 
-export async function addPriorityFees (connection: Connection, tx: Transaction, multiplier: number, maxPriorityFeeCap?: number, minPriorityFee?: number, computeLimit: number = 200_000): Promise<void> {
+export async function addPriorityFees (connection: Connection, tx: Transaction, multiplier: number, maxPriorityFeeCap?: number, minPriorityFee?: number, computeLimit: number = DEFAULT_COMPUTE_UNIT_LIMIT): Promise<void> {
 
     const lockedWritableAccounts = Array.from(new Set((tx.instructions
         .flatMap((ix) => ix.keys)
@@ -78,7 +82,7 @@ export async function addPriorityFees (connection: Connection, tx: Transaction, 
         console.warn(`Using min priority fee: ${minPriorityFee} instead of set fee: ${fee}`)
         fee = minPriorityFee
     }
-    const PRIORITY_FEE_IX = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: fee });
+    const PRIORITY_FEE_IX = ComputeBudgetProgram.setComputeUnitPrice({microLamports: fee});
     const COMPUTE_LIMIT_IX = ComputeBudgetProgram.setComputeUnitLimit({ units: computeLimit });
     tx.add(COMPUTE_LIMIT_IX, PRIORITY_FEE_IX)
 }

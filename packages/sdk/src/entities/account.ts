@@ -76,6 +76,7 @@ import {
     isEVMChain,
     CHAIN_ID_SOLANA,
     getAndValidateSolanaTokenAddress,
+    SolanaRedeemProgress,
 } from "@c3exchange/common"
 import algosdk, { waitForConfirmation, type Algodv2 } from "algosdk";
 import crypto from "crypto";
@@ -551,7 +552,14 @@ export default class Account<T extends MessageSigner = MessageSigner> {
                     this.messageSigner.signTransaction,
                     new solana.PublicKey(instrumentChain!.tokenAddress)
                 )
-                const transaction = await this.helpers.services.wormholeService.createWormholeTxForSolanaRedeem(xAsset, vaaSignature, this.messageSigner.connection, this.messageSigner.publickey, this.messageSigner.signTransaction)
+
+                const txProgress: SolanaRedeemProgress = {
+                    verifySigTxs: [],
+                    signers: [],
+                    totalTxCount: 0,
+                    successTxCount: 0,
+                }
+                const transaction = await this.helpers.services.wormholeService.createWormholeTxForSolanaRedeem(xAsset, vaaSignature, this.messageSigner.connection, this.messageSigner.publickey, this.messageSigner.signTransaction, txProgress)
                 wasRedeemed = true
                 return transaction
             }

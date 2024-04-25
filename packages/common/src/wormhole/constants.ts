@@ -22,8 +22,8 @@ import {
 import { WormholeEnvironment, WormholeNetwork, XContractAddress } from "./types";
 import { SupportedChainName } from "../chains";
 
-const isChainName = (s:string)=> s in CHAINS;
-const isChainId = (id:number) => Object.values(CHAINS).includes(id as ChainId)
+const isChainName = (s:string): s is ChainName => s in CHAINS;
+const isChainId = (id:number): id is ChainId => Object.values(CHAINS).includes(id as ChainId)
 
 const getWormholeContractsByNetwork = (network : WormholeNetwork): WormholeEnvironment =>{
     const contracts: ChainContracts = CONTRACTS[network];

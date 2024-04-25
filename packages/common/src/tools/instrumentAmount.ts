@@ -84,6 +84,10 @@ export class InstrumentAmount {
         return this.raw >= BigInt(0)
     }
 
+    isNegative(): boolean {
+        return this.raw < BigInt(0)
+    }
+
     isEqual(amount: InstrumentAmount): boolean {
         return this.raw === amount.raw
     }

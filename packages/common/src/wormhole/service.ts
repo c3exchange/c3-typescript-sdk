@@ -53,16 +53,25 @@ import { encodeUint16, getAlgorandIdAsString, toBigInt, zeroPadBytes } from "../
 import { getPublicKeyByAddress } from "../chains";
 import { CircleIntegration } from "./circle";
 import { tryHexToNativeString, tryNativeToUint8Array, tryUint8ArrayToNative } from "@certusone/wormhole-sdk/lib/cjs/utils/array";
-import { Connection, PublicKey, PublicKeyInitData, SendTransactionError, Transaction, TransactionResponse, TransactionSignature, VersionedTransactionResponse } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, PublicKeyInitData, SendTransactionError, Transaction, TransactionResponse, TransactionSignature, VersionedTransactionResponse } from "@solana/web3.js";
 import { createAssociatedTokenAccountInstruction, getAssociatedTokenAddress, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import type { SolanaSignTxCallback } from "../tools";
 import { custom_postVaaWithRetry, custom_redeemOnSolana, custom_transferFromSolana, custom_transferNativeSol } from "./internal/wrappedSolanaTokenBridge";
 import { addPriorityFees } from "../internal";
+import { sendAndConfirmTransactionsWithRetry } from "@certusone/wormhole-sdk/lib/cjs/solana";
+
+export type SolanaRedeemProgress = {
+    verifySigTxs?: Transaction[];
+    postVaaTx?: Transaction;
+    signers?: any[]; // see https://vscode.dev/github/c3exchange/c3/blob/fix/solana-redeem-rework/app/node_modules/%40certusone/wormhole-sdk/lib/cjs/solana/utils/transaction.d.ts#L6
+    successTxCount: number;
+    totalTxCount: number;
+}
 
 export interface WormholeService {
     getMirrorAsset(xAsset: XAssetId, dest: ChainName, provider?: ethers.providers.Provider | ethers.Signer): Promise<XAssetId>
     createWormholeTxForEthereumRedeem(sender: XRecipientId, vaa: Uint8Array, signer: Signer, overrides?: ethers.Overrides): Promise<ContractReceipt>
-    createWormholeTxForSolanaRedeem(asset: XAssetId, signedVAA: Uint8Array, connection: Connection, payerAccount: PublicKey, signCallback: SolanaSignTxCallback, postVaaMaxRetries?: number, multiplier?: number, maxPriorityFeeCap?: number, minPriorityFee?: number): Promise<string>
+    createWormholeTxForSolanaRedeem(asset: XAssetId, signedVAA: Uint8Array, connection: Connection, payerAccount: PublicKey, signCallback: SolanaSignTxCallback, transactionProgress: SolanaRedeemProgress, postVaaMaxRetries?: number, multiplier?: number, maxPriorityFeeCap?: number, minPriorityFee?: number): Promise<string>;
     redeemOnAlgorand(sender: XRecipientId, vaa: Uint8Array): Promise<TransactionSignerPair[]>
     createWormholeTxForEvmNetworkDeposit(toAddress: XRecipientId, asset: XAssetId, amount: BigNumberish, repayAmount: bigint, signer: Signer, receiver: string, overrides?: PayableOverrides): Promise<ContractReceipt>
     createWormholeTxForEvmNetworkDeposit_CCTP(toAddress: XRecipientId, asset: XAssetId, amount: BigNumberish, repayAmount: bigint, signer: Signer, receiver: string, hubAddress: string, overrides?: PayableOverrides): Promise<ContractReceipt>
@@ -449,7 +458,20 @@ export class WormholeServiceImpl implements WormholeService {
     }
 
 
-    public async createWormholeTxForSolanaRedeem(asset: XAssetId, signedVAA: Uint8Array, connection: Connection, payerAccount: PublicKey, signCallback: SolanaSignTxCallback<Transaction>, postVaaMaxRetries?: number, multiplier?: number, maxPriorityFeeCap?: number, minPriorityFee?: number):  Promise<string>
+    /**
+     * Creates a transaction for withdraw assets on Solana.
+     * @remarks The transactionProgress object is modified in place, beware of any concurrency issues.
+     */
+    public async createWormholeTxForSolanaRedeem(asset: XAssetId, 
+        signedVAA: Uint8Array, 
+        connection: Connection,
+        payerAccount: PublicKey, 
+        signCallback: SolanaSignTxCallback<Transaction>, 
+        transactionProgress: SolanaRedeemProgress, 
+        postVaaMaxRetries?: number, 
+        multiplier?: number, 
+        maxPriorityFeeCap?: number, 
+        minPriorityFee?: number):  Promise<string>
     {
         // const isNativeSol = this.dictionary.isWrappedCurrency(asset);
         const bridgeAddress = this.dictionary.getCoreContractAddress(SolanaChainName);
@@ -457,39 +479,11 @@ export class WormholeServiceImpl implements WormholeService {
 
         const feeRecipientTokenAccount = this.getSolanaAssociatedTokenAddressRaw(new PublicKey(asset.tokenAddress), payerAccount).toString()
 
-        // If we want to retry a redeem, e.g from the relayer, the postVaaSolanawithRetry will
-        // fail with account 'already in use' if it was already called before , so we handle that here.
-        // This is a shortcoming of the old Wormhole SDK.
-
-        try {
-            await custom_postVaaWithRetry(connection, signCallback, payerAccount, new PublicKey(bridgeAddress.tokenAddress), Buffer.from(signedVAA), postVaaMaxRetries, "finalized", multiplier, maxPriorityFeeCap, minPriorityFee)
-        } catch (error) {
-            if (error instanceof SendTransactionError && error.logs?.includes("Program log: Instruction: LegacyPostVaa") && error.logs?.includes("already in use")) {
-                console.warn(`createWormholeTxForSolanaRedeem: LegacyPostVaa already called for VAA ${Buffer.from(signedVAA).toString('hex')}, skipping`)
-            } else {
-                throw error;
-            }
-        }
-        
-        /**
-         * IMPORTANT, `redeemAndUnwrapOnSolana` IS NOT WORKING, DO NOT USE IT!!
-         * Temporal solution is to use `redeemOnSolana` to transfer the native token to the recipient.
-         */
-        // const tx = isNativeSol ?
-        //     (await redeemAndUnwrapOnSolana(connection, 
-        //         bridgeAddress.tokenAddress,
-        //         tokenBridgeAddress.tokenAddress, 
-        //         payerAccount.toString(), signedVAA, "finalized", feeRecipientTokenAccount)) 
-        //         : 
-        //         (await redeemOnSolana(connection, 
-        //             bridgeAddress.tokenAddress, 
-        //             tokenBridgeAddress.tokenAddress, 
-        //             payerAccount.toString(), signedVAA, feeRecipientTokenAccount, "finalized"))
-
+        await custom_postVaaWithRetry(connection, signCallback, payerAccount, new PublicKey(bridgeAddress.tokenAddress), Buffer.from(signedVAA), transactionProgress, postVaaMaxRetries, "finalized", multiplier, maxPriorityFeeCap, minPriorityFee)
         const tx = await custom_redeemOnSolana(connection, bridgeAddress.tokenAddress, tokenBridgeAddress.tokenAddress, payerAccount.toString(), signedVAA, feeRecipientTokenAccount, "finalized", multiplier, maxPriorityFeeCap, minPriorityFee)
-        const signedTx = await signCallback(tx)
-        const txn = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 50 })
-        return txn
+        const txn = await sendAndConfirmTransactionsWithRetry(connection, signCallback, payerAccount.toString(), [tx], postVaaMaxRetries, { skipPreflight: false, commitment: "finalized" })
+        transactionProgress.successTxCount++
+        return txn[0].signature
     }
 
     public  async redeemOnAlgorand(asset: XAssetId, vaa: Uint8Array): Promise<TransactionSignerPair[]>{
@@ -585,7 +579,7 @@ export class WormholeServiceImpl implements WormholeService {
             tx.feePayer = ownerPublicKey
             await addPriorityFees(connection, tx, 1.25)
             const signedTx = await ownerSignCallback(tx)
-            const signature = await connection.sendRawTransaction(signedTx.serialize(), { maxRetries: 50 })
+            const signature = await connection.sendRawTransaction(signedTx.serialize())
 
             const latestBlockHash = await connection.getLatestBlockhash();
 

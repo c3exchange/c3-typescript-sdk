@@ -1,6 +1,6 @@
 {
   "name": "@c3exchange/common",
-  "version": "0.5.0-alpha.1",
+  "version": "0.5.0-alpha.2",
   "description": "",
   "main": "./build/src/index.js",
   "module": "./build/src/index.js",

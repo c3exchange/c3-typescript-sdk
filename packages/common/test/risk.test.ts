@@ -929,7 +929,7 @@ describe('availableForTrade', () => {
 
         const orderPrice = MarketPrice.fromDecimal(ALGO_USDC, "0.5")
 
-        const maxAvailableTradeBase = availableForTradePriceAdjusted( ALGO_RiskParameters, USDC_RiskParameters, margin, orderPrice, userPosition, "debug_prefix")
-        expect(maxAvailableTradeBase.greaterThanOrEqual(InstrumentAmount.fromDecimal(maxAvailableTradeBase.instrument,"999999999"))).to.equal(true)
+        const maxAvailableTradeBase = availableForTradePriceAdjusted( ALGO_RiskParameters, USDC_RiskParameters, margin, orderPrice, userPosition)
+        expect(maxAvailableTradeBase.lessThan(InstrumentAmount.fromDecimal(maxAvailableTradeBase.instrument,"999999999"))).to.equal(true)
     })
 })
