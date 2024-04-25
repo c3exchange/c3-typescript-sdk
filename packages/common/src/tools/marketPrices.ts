@@ -59,10 +59,10 @@ export class MarketPrice {
         return this.toDecimal() + " " + this.market.quoteInstrument.asaUnitName + "/" + this.market.baseInstrument.asaUnitName
     }
 
-    asFraction(): {numerator: bigint, denominator: bigint} {
+    asFraction(): {numerator: bigint, denominator: bigint, decimals: number} {
         const num = this.raw
         const decimals = FIXED_POINT_DECIMALS - this.market.baseInstrument.asaDecimals + this.market.quoteInstrument.asaDecimals
-        return {numerator: num, denominator: tenPower(decimals)}
+        return {numerator: num, denominator: tenPower(decimals), decimals: decimals}
     }
 
 

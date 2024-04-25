@@ -12,7 +12,8 @@ export const SUPPORTED_MAINNET_CCTP_CHAINS = [
 
 export const SUPPORTED_TESTNET_CCTP_CHAINS = [
     ...SUPPORTED_MAINNET_CCTP_CHAINS,
-    'sepolia'
+    'sepolia',
+    'arbitrum_sepolia'
 ] as const
 
 export type CCTPChain = typeof SUPPORTED_TESTNET_CCTP_CHAINS[number]
@@ -95,6 +96,11 @@ export class WormholeDictionary {
                     messageTransmitter: "0xcafecafecafecafecafecafecafecafecafecafe",
                     tokenMinter: "0xcafecafecafecafecafecafecafecafecafecafe",
                     tokenMessenger: "0xcafecafecafecafecafecafecafecafecafecafe"
+                },
+                arbitrum_sepolia: {
+                    messageTransmitter: "0x109bc137cb64eab7c0b1dddd1edf341467dc2d35",
+                    tokenMinter: "0xe997d7d2f6e065a9a93fa2175e878fb9081f1f0a",
+                    tokenMessenger: "0x12dcfd3fe2e9eac2859fd1ed86d2ab8c5a2f9352"
                 }
             },
             TESTNET: {
@@ -122,6 +128,11 @@ export class WormholeDictionary {
                     messageTransmitter: "0x7865fAfC2db2093669d92c0F33AeEF291086BEFD",
                     tokenMinter: "0xE997d7d2F6E065a9A93Fa2175E878Fb9081F1f0A",
                     tokenMessenger: "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5"
+                },
+                arbitrum_sepolia: {
+                    messageTransmitter: "0xaCF1ceeF35caAc005e15888dDb8A3515C41B4872",
+                    tokenMinter: "0xE997d7d2F6E065a9A93Fa2175E878Fb9081F1f0A",
+                    tokenMessenger: "0x9f3b8679c73c2fef8b59b4f3444d4e156fb70aa5"
                 }
             },
             DEVNET: {
@@ -149,7 +160,12 @@ export class WormholeDictionary {
                     messageTransmitter:  "0x0000000000000000000000000000000000000000",
                     tokenMinter: "0x0000000000000000000000000000000000000000",
                     tokenMessenger: "0x0000000000000000000000000000000000000000"
-                }
+                },
+                arbitrum_sepolia: {
+                    messageTransmitter:  "0x0000000000000000000000000000000000000000",
+                    tokenMinter: "0x0000000000000000000000000000000000000000",
+                    tokenMessenger: "0x0000000000000000000000000000000000000000"
+                },
             }
         }
         if (!this.isValidCCTPChain(chain)) {
@@ -170,7 +186,8 @@ export class WormholeDictionary {
                 avalanche: { cctp: "0x09Fb06A271faFf70A651047395AaEb6265265F13" },
                 ethereum: { cctp: "0xAaDA05BD399372f0b0463744C09113c137636f6a" },
                 optimism: { cctp: "0x2703483B1a5a7c577e8680de9Df8Be03c6f30e3c" },
-                sepolia: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" }
+                sepolia: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
+                arbitrum_sepolia: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
             },
 
             TESTNET: {
@@ -178,7 +195,8 @@ export class WormholeDictionary {
                 avalanche: { cctp: "0x58f4c17449c90665891c42e14d34aae7a26a472e" },
                 ethereum: { cctp: "0x0a69146716b3a21622287efa1607424c663069a4" },
                 optimism: { cctp: "0x2703483b1a5a7c577e8680de9df8be03c6f30e3c" },
-                sepolia: { cctp: "0x2703483B1a5a7c577e8680de9Df8Be03c6f30e3c" }
+                sepolia: { cctp: "0x2703483B1a5a7c577e8680de9Df8Be03c6f30e3c" },
+                arbitrum_sepolia: { cctp: "0x2703483B1a5a7c577e8680de9Df8Be03c6f30e3c" },
             },
 
             // Those are bugs addresses!
@@ -187,7 +205,8 @@ export class WormholeDictionary {
                 avalanche: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
                 ethereum: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
                 optimism: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
-                sepolia: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" }
+                sepolia: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" },
+                arbitrum_sepolia: { cctp: "0xcafecafecafecafecafecafecafecafecafecafe" }
             }
         }
 
@@ -211,14 +230,16 @@ export class WormholeDictionary {
                 avalanche: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
                 arbitrum: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
                 // optimism: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-                sepolia: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe"
+                sepolia: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
+                arbitrum_sepolia: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe"
             },
             TESTNET: {
                 ethereum: "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
                 avalanche: "0x5425890298aed601595a70AB815c96711a31Bc65",
                 arbitrum: "0xF175520C52418dfE19C8098071a252da48Cd1C19",
                 // optimism: "0xe05606174bac4A6364B31bd0eCA4bf4dD368f8C6"
-                sepolia: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+                sepolia: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+                arbitrum_sepolia: "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d"
             },
             DEVNET: {
                 ethereum: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
@@ -226,6 +247,7 @@ export class WormholeDictionary {
                 arbitrum: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
                 // optimism: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe"
                 sepolia: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe",
+                arbitrum_sepolia: "0xCAfEcAfeCAfECaFeCaFecaFecaFECafECafeCaFe"
             }
         }
 

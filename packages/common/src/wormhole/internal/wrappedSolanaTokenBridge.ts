@@ -1,4 +1,4 @@
-import { ChainId, ChainName, CHAIN_ID_SOLANA, addPriorityFees, SolanaSignTxCallback } from "../.."
+import { ChainId, ChainName, CHAIN_ID_SOLANA, addPriorityFees, SolanaSignTxCallback, SolanaRedeemProgress } from "../.."
 import { Commitment, Connection, Keypair, PublicKey, PublicKeyInitData, Transaction as SolanaTransaction, SystemProgram, Transaction } from "@solana/web3.js";
 import { coalesceChainId } from "@certusone/wormhole-sdk/lib/cjs/utils/consts";
 import { createNonce } from "@certusone/wormhole-sdk/lib/cjs/utils/createNonce";
@@ -15,12 +15,16 @@ import { ACCOUNT_SIZE, NATIVE_MINT, TOKEN_PROGRAM_ID, createCloseAccountInstruct
 import { parseTokenTransferVaa } from "@certusone/wormhole-sdk/lib/cjs/vaa/tokenBridge";
 import { createPostSignedVaaTransactions } from "@certusone/wormhole-sdk/lib/cjs/solana/sendAndConfirmPostVaa";
 import { sendAndConfirmTransactionsWithRetry, modifySignTransaction } from "@certusone/wormhole-sdk/lib/cjs/solana/utils";
+import { derivePostedVaaKey } from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
+import { keccak256, parseVaa } from "@certusone/wormhole-sdk";
+import base58 from "bs58";
 
 
 const DEPOSIT_SOLANA_MULTIPLIER = 1.05
 const DEFAULT_SOLANA_REDEEM_MULTIPLIER = 1
-const DEFAULT_POST_VAA_COMPUTE_LIMIT = 40_000
-const DEFAULT_REDEEM_TRANSFER_COMPUTE_LIMIT = 80_000
+const DEFAULT_SIGVERIFY_COMPUTE_LIMIT = 70_000
+const DEFAULT_POST_VAA_COMPUTE_LIMIT = 130_000
+const DEFAULT_REDEEM_TRANSFER_COMPUTE_LIMIT = 160_000
 
 /**
  * Wormhole team doesn't want to fix solana transfer and reedem functions, so we need to create our own functions to support adding priority fees.
@@ -154,17 +158,112 @@ export async function custom_postVaaWithRetry(
     payer: PublicKeyInitData,
     wormholeProgramId: PublicKeyInitData,
     vaa: Buffer,
+    transactionProgress: SolanaRedeemProgress,
     maxRetries?: number,
     commitment?: Commitment,
     multiplier = DEFAULT_SOLANA_REDEEM_MULTIPLIER,
     maxPriorityFeeCap?: number,
     minPriorityFee?: number
-) {
-    const { unsignedTransactions, signers } = await createPostSignedVaaTransactions(connection, wormholeProgramId, payer, vaa, commitment);
-    const postVaaTransaction = unsignedTransactions.pop()!;
-    await addPriorityFees(connection, postVaaTransaction, multiplier, maxPriorityFeeCap, minPriorityFee, DEFAULT_POST_VAA_COMPUTE_LIMIT)
-    const responses = await sendAndConfirmTransactionsWithRetry(connection, modifySignTransaction(signTransaction, ...signers), payer.toString(), unsignedTransactions, maxRetries);
-    //While the signature_set is used to create the final instruction, it doesn't need to sign it.
-    responses.push(...(await sendAndConfirmTransactionsWithRetry(connection, signTransaction, payer.toString(), [postVaaTransaction], maxRetries)));
-    return responses;
+): Promise<any[]>
+{
+    // If the VAA has already been posted, return early   so we know the only
+    // thing to try is the final redeem tx.  
+
+    const postedVaaAddress = derivePostedVaaKey(
+        wormholeProgramId,
+        parseVaa(vaa).hash,
+    );
+
+    if (await connection.getAccountInfo(postedVaaAddress)) {
+        // There is a edge case when we retry the redeem tx, but the VAA has already been posted,
+        // and the input transactionProgress is zero (because e.g the relayer startedup again)
+        // In this case we know at least 1 verify sig and post VAA succeed, so set the successTxCount to 2 
+        // and the totalTxCount to 3 (verifySigs + postVAA + redeem)
+
+        if (transactionProgress.successTxCount === 0) {
+            transactionProgress.successTxCount = 2
+        }
+        if (transactionProgress.totalTxCount === 0) {
+            transactionProgress.totalTxCount = 3
+        }
+        console.warn('createWormholeTxForSolanaRedeem: This VAA has already been posted')
+        return []
+    }
+
+    if (!transactionProgress.verifySigTxs || !transactionProgress.signers || !transactionProgress.postVaaTx || !transactionProgress.totalTxCount || !transactionProgress.successTxCount) {
+
+        // First time, fill and add priority fees/compute budget
+
+        const allTxs = await createPostSignedVaaTransactions(connection, wormholeProgramId, payer, vaa, commitment);
+        const unsignedTransactions = allTxs.unsignedTransactions;
+        transactionProgress.postVaaTx = allTxs.unsignedTransactions.pop()!;
+        transactionProgress.signers = allTxs.signers;
+        transactionProgress.verifySigTxs = unsignedTransactions;
+
+        await addPriorityFees(connection, transactionProgress.postVaaTx, multiplier, maxPriorityFeeCap, minPriorityFee, DEFAULT_POST_VAA_COMPUTE_LIMIT)
+
+        for (const tx of transactionProgress.verifySigTxs) {
+            await addPriorityFees(connection, tx, multiplier, maxPriorityFeeCap, minPriorityFee, DEFAULT_SIGVERIFY_COMPUTE_LIMIT)
+        }
+
+        transactionProgress.successTxCount = 0
+        transactionProgress.totalTxCount = transactionProgress.verifySigTxs.length + 2 // verifySigs + postVAA + redeem
+    }
+
+    const verifySignatures = async (transaction: Transaction) => {
+        return await sendAndConfirmTransactionsWithRetry(
+            connection,
+            modifySignTransaction(signTransaction, ...transactionProgress.signers!),
+            payer.toString(),
+            [transaction],
+            maxRetries,
+            {
+                skipPreflight: false,
+                commitment
+            },
+        );
+    }
+
+    const responses = [];
+    const verified = await Promise.allSettled(
+        transactionProgress.verifySigTxs.map(async (transaction) => {
+            await verifySignatures(transaction);
+            return transaction
+        })
+    )
+
+    const succeedTxs = verified.map((value, index) => {
+        if (value.status === 'fulfilled') {
+            const tx = value.value
+            console.log(`Submitted transaction ${base58.encode(value.value.signature!)}`)
+            transactionProgress.successTxCount!++;
+            return tx
+        } else {
+            console.error(`Failed to verify signature for transaction ${index}: ${value.reason}`);
+        }
+    }).filter( (tx) : tx is SolanaTransaction => tx !== undefined)
+    
+    transactionProgress.verifySigTxs = transactionProgress.verifySigTxs.filter( tx => tx.signature && !succeedTxs.find(stx => stx.signature === tx.signature))
+
+    if (transactionProgress.successTxCount < transactionProgress.totalTxCount - 2) {
+        throw new Error(`Not enough signatures: ${transactionProgress.successTxCount} out of ${transactionProgress.totalTxCount - 2}.`);
+    }
+    responses.push(...verified);
+
+    responses.push(
+        await sendAndConfirmTransactionsWithRetry(
+            connection,
+            signTransaction,
+            payer.toString(),
+            [transactionProgress.postVaaTx],
+            maxRetries,
+            {
+                skipPreflight: false,
+                commitment,
+            },
+        ),
+    );
+    transactionProgress.successTxCount++ 
+
+    return responses
 }
