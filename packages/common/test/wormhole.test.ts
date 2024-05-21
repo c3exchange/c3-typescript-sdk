@@ -28,6 +28,13 @@ describe("Wormhole helper tests", () => {
         expect(dictionary.getWrappedNativeCurrencyAddress(ArbitrumChainName).chain).to.be.equal(ArbitrumChainName)
         expect(dictionary.getWrappedNativeCurrencyAddress(ArbitrumSepoliaChainName).tokenAddress).to.be.equal("0x980B62Da83eFf3D4576C647993b0c1D7faf17c73")
         expect(dictionary.getWrappedNativeCurrencyAddress(ArbitrumSepoliaChainName).chain).to.be.equal(ArbitrumSepoliaChainName)
+
+        expect(dictionary.isCctpWithdraw(ALGO_INSTRUMENT, "algorand")).to.be.false
+        expect(dictionary.isCctpWithdraw({ ...ALGO_INSTRUMENT, asaId: 166458877 }, "sepolia")).to.be.true
+        expect(dictionary.isCctpWithdraw({ ...ALGO_INSTRUMENT, asaId: 166458877 }, "bsc")).to.be.false
+        expect(dictionary.isCctpWithdraw({ ...ALGO_INSTRUMENT, asaId: 166458877 }, "ethereum")).to.be.true
+        expect(dictionary.isCctpWithdraw({ ...ALGO_INSTRUMENT, asaId: 166458877 }, "arbitrum_sepolia")).to.be.true
+        expect(dictionary.isCctpWithdraw({ ...ALGO_INSTRUMENT, asaId: 166458877 }, "avalanche")).to.be.false
     })
     it("Should validate ethereum wormholeVAA successfully", () => {
         const AVAX_INSTRUMENT: Instrument = {

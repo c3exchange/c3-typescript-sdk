@@ -67,8 +67,8 @@ export function defaultMaxWithdrawFeesTable (): MaxWithdrawFeesTable {
     '"BTC":{"ethereum":"0.0005","algorand":"0.00002","avalanche":"0.00055", "sepolia": "0.0005" },' +
     '"WBTC":{"ethereum":"0.0005","algorand":"0.00002","avalanche":"0.00055", "sepolia": "0.0005" },' +
     '"ARB": {"arbitrum": "0.75", "algorand": "0.025" },' +
-    '"WBNB": {"bsc": "0.0067" , "algorand":"0.00008"},' +
-    '"BNB":  {"bsc": "0.0067" ,"algorand":"0.00008"},' +
+    '"WBNB": {"bsc": "0.0005" , "algorand":"0.00008"},' +
+    '"BNB":  {"bsc": "0.0005" , "algorand":"0.00008"},' +
     '"WSOL": {"solana": "0.01" },' +
     '"SOL": {"solana": "0.004" },' +
     '"PYTH": {"solana": "0.9" }, ' +

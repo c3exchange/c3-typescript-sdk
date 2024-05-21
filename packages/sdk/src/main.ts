@@ -125,6 +125,7 @@ export * from "./internal/helpers/operation"
 export * from "./entities/account"
 export * from "./entities/markets"
 export * from "./ws/WebSocketClient"
+export * from "./internal/helpers/factory"
 export { AxiosError } from "./internal/utils/http"
 
 

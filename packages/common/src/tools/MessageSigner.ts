@@ -10,7 +10,20 @@ type MessageSignCallback = (data: Uint8Array) => Promise<RawSignature>
 type SignCallback = (txs: algosdk.Transaction[]) => Promise<Uint8Array[]>
 type TealSignCallback = (data: Uint8Array, address: UserAddress, hash: string) => Promise<SignedMessage>
 
-abstract class MessageSigner {
+/**
+ * Funder is a signer that can only sign transactions, it cannot sign messages and is used to refer the deposit wallet to be used for funding
+ */
+interface Funder {
+}
+
+/**
+ * Owner is a signer that has the same functionality of the Funder but can also sign messages.
+ */
+interface Owner extends Funder {
+}
+
+
+abstract class MessageSigner implements Owner {
     public constructor(
         readonly address: UserAddress,
         readonly chainId: ChainId,
@@ -69,14 +82,15 @@ type SolanaTransaction = Transaction | VersionedTransaction
 type SolanaSignTxCallback<T extends SolanaTransaction = SolanaTransaction> = (tx: T) => Promise<T>
 
 class SolanaSigner extends MessageSigner {
+    readonly publickey: PublicKey
     public constructor(
         address: UserAddress,
-        readonly publickey: PublicKey,
         readonly signTransaction: SolanaSignTxCallback,
         signMessage: (messageToSign: Uint8Array) => Promise<RawSignature>,
         readonly connection?: Connection
     ) {
         super(address, CHAIN_ID_SOLANA, signMessage)
+        this.publickey = new PublicKey(address)
     }
 }
 
@@ -85,6 +99,7 @@ export type {
     SignCallback,
     TealSignCallback,
     SolanaSignTxCallback,
+    Owner, Funder,
 }
 
 export {

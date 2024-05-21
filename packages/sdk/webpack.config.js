@@ -78,6 +78,7 @@ module.exports = (_env, argv) => {
         'aptos':  dummyfilePath,
         '@mysten/sui.js':  dummyfilePath,
         'near-api-js':  dummyfilePath,
+        '@improbable-eng/grpc-web-node-http-transport':  dummyfilePath,
       }
     },
     plugins: [

@@ -33,8 +33,6 @@ import {
     AccountTrade,
     OperationStatus,
     AccountOperationType,
-    EVMSigner,
-    AlgorandSigner,
     toChainId,
     WormholeService,
     createWithdraw,
@@ -64,7 +62,6 @@ import {
     isValidAccountId,
     DelegationId,
     encodeAccountId,
-    SolanaSigner,
     CHAIN_UTILS,
     Margin,
     buildDelegationOperation,
@@ -74,9 +71,13 @@ import {
     defaultOrderExpiration,
     userAddressToAccountId,
     isEVMChain,
-    CHAIN_ID_SOLANA,
     getAndValidateSolanaTokenAddress,
     SolanaRedeemProgress,
+    InstrumentChain,
+    CHAIN_ID_ALGORAND,
+    Funder,
+    SlotId,
+    ContractAmount,
 } from "@c3exchange/common"
 import algosdk, { waitForConfirmation, type Algodv2 } from "algosdk";
 import crypto from "crypto";
@@ -85,8 +86,9 @@ import * as solana from "@solana/web3.js"
 import assert from "assert";
 import { ROUNDS_TO_WAIT } from "../internal/const";
 import { asMargin } from "../internal/helpers/parser"
-import { getWormholeDepositInfo } from "../main";
+import { getWormholeDepositInfo, isAlgorandSigner, isCCTPInstrument, isEVMSigner, isSolanaSigner } from "../main";
 import { WebSocketClient } from "../ws/WebSocketClient"
+import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport"
 
 interface GetTradesQuery {
     offset?: number
@@ -141,7 +143,7 @@ interface DepositParams {
     amount: string,
     instrumentId: InstrumentId,
     chainName?: ChainName,
-    funder?: MessageSigner,
+    funder?: Funder,
     repayAmount?: string,
 }
 
@@ -186,7 +188,7 @@ const ephemeralSecretoToMessageSigner = (secret: Uint8Array): MessageSigner => {
     return new SignerUtil().addFromMnemonic(mnemonic)
 }
 
-export default class Account<T extends MessageSigner = MessageSigner> {
+export default class Account {
     public readonly userAddress: UserAddress
     public readonly chainId: SupportedChainId
     public readonly accountId: AccountId
@@ -203,7 +205,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
     constructor(
         private readonly serverConfig: UrlConfig,
         private readonly session: AccountSession,
-        public readonly messageSigner: T,
+        public readonly messageSigner: MessageSigner,
         private readonly helpers: {
             depositAlgorand: DepositFundsAlgorand,
             depositWormhole: DepositFundsWormhole,
@@ -377,9 +379,9 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             throw new Error("Amounts must be positive")
         }
 
-        if (funder instanceof AlgorandSigner) {
+        if (isAlgorandSigner(funder)) {
             return this.helpers.depositAlgorand(this.accountId, instrumentAmount, instrumentRepayAmount ?? InstrumentAmount.zero(instrumentAmount.instrument), funder)
-        } else if ((funder instanceof EVMSigner || funder instanceof SolanaSigner) && chainName) {
+        } else if ((isEVMSigner(funder) || isSolanaSigner(funder)) && chainName) {
             return this.helpers.depositWormhole(this.accountId, instrumentAmount, instrumentRepayAmount ?? InstrumentAmount.zero(instrumentAmount.instrument), funder, chainName)
         }
 
@@ -391,22 +393,38 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         const instrumentAmount: InstrumentAmount = InstrumentAmount.fromDecimal(instrument, amount)
         const instrumentMaxFeeAmount: InstrumentAmount = InstrumentAmount.fromDecimal(instrument, maxFees)
 
+        // Check if max fees are less than the amount
+        if (instrumentMaxFeeAmount.raw >= instrumentAmount.raw) {
+            throw new Error("Max fees must be less than the amount")
+        }
 
-        //check if maxBorrow is present
+        // Check if maxBorrow is present
         let instrumentMaxBorrowAmount: InstrumentAmount = InstrumentAmount.zero(instrument)
 
         if (maxBorrow) {
             instrumentMaxBorrowAmount = InstrumentAmount.fromDecimal(instrument, maxBorrow)
         }
 
-        if (!instrumentAmount.isPositive() || (instrumentMaxBorrowAmount && !instrumentMaxBorrowAmount.isPositive())) {
-            throw new Error("Amounts must be positive")
+        if (!instrumentAmount.isPositive() || (instrumentMaxBorrowAmount && !instrumentMaxBorrowAmount.isPositive()) || !instrumentMaxFeeAmount.isPositive()) {
+            throw new Error("Withdraw amount, borrow amount or fee amount must be positive values")
         }
 
         const [{ lease, lastValid }, slotId] = await Promise.all([
             this.getOperationParams(),
             this.helpers.getSlotId(instrument.asaId),
         ])
+
+        // Check if the destination chain is valid and consistent with the destination address
+        const supportedChainId = toSupportedChainId(toChainId(destinationChainName))
+        if (!CHAIN_UTILS[supportedChainId].isValidAddress(destinationAddress)) {
+            throw new Error("Invalid destination address")
+        }
+
+        const isCCTPWithdraw = this.helpers.services.wormholeService.getDictionary().isCctpWithdraw(instrument, destinationChainName)
+        let instrumentChain: InstrumentChain | undefined = instrument.chains.find(c => c.chainId === supportedChainId)
+        if (!isCCTPWithdraw && (supportedChainId !== CHAIN_ID_ALGORAND) && !instrumentChain) {
+            throw new Error(`Couldn't found the destination chain for the instrument ${instrumentId}`)
+        }
 
         /**
          * IMPORTANT PLEASE READ:
@@ -416,7 +434,6 @@ export default class Account<T extends MessageSigner = MessageSigner> {
          */
         let destinationAddressFixed: UserAddress = destinationAddress, solanaOwnerAddress: UserAddress | undefined = undefined
         if (destinationChainName === "solana") {
-            const instrumentChain = instrument.chains.find(c => c.chainId === CHAIN_ID_SOLANA)
             if (!instrumentChain)
                 throw new Error("Invalid destination chain")
             const { tokenAccountAddress, ownerAddress } = await getAndValidateSolanaTokenAddress(
@@ -472,6 +489,12 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         let vaaSignature: Uint8Array
         let wasRedeemed = false
 
+        let rpcTransport: Record<string, unknown> | undefined = undefined
+        // @ts-ignore NodeHttpTransport is not available in the browser and it is required for the node environment
+        if (typeof window === "undefined") {
+            rpcTransport = { transport: NodeHttpTransport() }
+        }
+
         const { isCCTP } = getWormholeDepositInfo(instrument, this.helpers.services.wormholeService.getDictionary(), destinationChainName)
 
         const getVAASequence = async () => {
@@ -482,30 +505,35 @@ export default class Account<T extends MessageSigner = MessageSigner> {
             return vaaSequence
         }
 
-        const waitForWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+        const waitForWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions = rpcTransport) => {
+            vaaSequence = await getVAASequence()
             if (!vaaSignature) {
                 vaaSignature = await  this.helpers.services.wormholeService.fetchVaaFromSource("algorand", BigInt(vaaSequence), retryTimeout, maxRetryCount, rpcOptions)
             }
             return vaaSignature
         }
 
-        const isTransferCompleted = (provider?: ethers.Signer | ethers.providers.Provider | solana.Connection) => {
+        const isTransferCompleted = async (provider?: ethers.Signer | ethers.providers.Provider | solana.Connection, retryTimeout?: number, maxRetryCount?: number, rpcOptions = rpcTransport) => {
             if (wasRedeemed) {
-                return Promise.resolve(true)
+                return true
             }
             if (!vaaSignature) {
-                throw new Error("VAA signature is not available")
+                try {
+                    vaaSignature = await waitForWormholeVAA(retryTimeout || 0, maxRetryCount || 1, rpcOptions)
+                } catch (err) {
+                    return false
+                }
             }
             if (destinationChainName === "solana") {
                 if (provider instanceof solana.Connection) {
                     return this.helpers.services.wormholeService.isSolanaTransferComplete(provider, vaaSignature)
-                } else if (this.messageSigner instanceof SolanaSigner && this.messageSigner.connection) {
+                } else if (isSolanaSigner(this.messageSigner) && this.messageSigner.connection) {
                     return this.helpers.services.wormholeService.isSolanaTransferComplete(this.messageSigner.connection, vaaSignature)
                 }
             } else if (isEVMChain(destinationChainName)) {
                 if (provider instanceof ethers.Signer || provider instanceof ethers.providers.Provider) {
                     return this.helpers.services.wormholeService.isEthereumTransferComplete(provider, vaaSignature, destinationChainName)
-                } else if (this.messageSigner instanceof EVMSigner) {
+                } else if (isEVMSigner(this.messageSigner)) {
                     return this.helpers.services.wormholeService.isEthereumTransferComplete(this.messageSigner.getSigner(), vaaSignature, destinationChainName)
                 }
             }
@@ -513,7 +541,7 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         }
 
         // TODO: First argument must be generic for EVM and Solana
-        const redeemWormholeVAA = async (ethersSigner?: ethers.Signer, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+        const redeemWormholeVAA = async (ethersSigner?: ethers.Signer, retryTimeout?: number, maxRetryCount?: number, rpcOptions = rpcTransport) => {
 
             if (isCCTP) {
                 console.warn("Ignoring redeemAndSubmitWormholeVAA for CCTP")
@@ -527,20 +555,22 @@ export default class Account<T extends MessageSigner = MessageSigner> {
                 await waitForWormholeVAA(retryTimeout, maxRetryCount, rpcOptions)
             }
 
-            const instrumentChain = instrument.chains.find((c) => c.chainId === toChainId(destinationChainName))
-            const xAsset: XContractAddress = { chain: destinationChainName, tokenAddress: instrumentChain!.tokenAddress }
+            if (!instrumentChain)
+                throw new Error("Invalid destination chain")
 
-            if (this.messageSigner instanceof EVMSigner) {
+            const xAsset: XContractAddress = { chain: destinationChainName, tokenAddress: instrumentChain.tokenAddress }
+
+            if (isEVMSigner(this.messageSigner)) {
                 const overrides = {
                     gasLimit: 1000000,
                 }
-                const concreteSigner = ethersSigner ?? this.messageSigner.getSigner() 
+                const concreteSigner = ethersSigner ?? this.messageSigner.getSigner()
                 const contractReceip = await this.helpers.  services.wormholeService.createWormholeTxForEthereumRedeem(xAsset, vaaSignature, concreteSigner, overrides)
                 if (contractReceip.status && contractReceip.status !== 0) {
                     wasRedeemed = true
                     return contractReceip
-                }                
-            } else if (this.messageSigner instanceof SolanaSigner) {
+                }
+            } else if (isSolanaSigner(this.messageSigner)) {
                 if (!this.messageSigner.connection) {
                     throw new Error("Solana signer requires a connection")
                 }
@@ -654,26 +684,41 @@ export default class Account<T extends MessageSigner = MessageSigner> {
         cash: InstrumentAmount[],
         pool: InstrumentAmount[],
     ) => {
-        const [{ lease, lastValid }, mapCash, mapPool] = await Promise.all([
-            this.getOperationParams(),
-            Promise.all(cash.map(async (amount): Promise<[number, bigint]> => [await this.helpers.getSlotId(amount.instrument.asaId), amount.toContract()])),
-            Promise.all(pool.map(async (amount): Promise<[number, bigint]> => [await this.helpers.getSlotId(amount.instrument.asaId), amount.toContract()]))
-        ])
+        const asaIds = new Set([...cash.map((amount) => amount.instrument.asaId), ...pool.map((amount) => amount.instrument.asaId)])
+        const asaIdToSlotId = new Map<number, number>()
+        for (const asaId of asaIds) {
+            const slotId = await this.helpers.getSlotId(asaId)
+            asaIdToSlotId.set(asaId, slotId)
+        }
+        const getSlotOrThrow = (asaId: AssetId) => {
+            const slot = asaIdToSlotId.get(asaId)
+            if (slot === undefined) {
+                throw new Error(`Cant convert assetId to slotId ${asaId}`)
+            }
+            return slot
+        }
+        const sortByAscendingSlot = (a: InstrumentAmount, b: InstrumentAmount) => {
+            const p1 = getSlotOrThrow(a.instrument.asaId);
+            const p2 = getSlotOrThrow(b.instrument.asaId);
+            return p1 - p2
+        }
+        const sortedCash = cash.sort(sortByAscendingSlot)
+        const sortedPool = pool.sort(sortByAscendingSlot)
+        const amountToTuple = (amount: InstrumentAmount): [SlotId, ContractAmount] => {
+            return [getSlotOrThrow(amount.instrument.asaId), amount.toContract()]
+        }
+        const sortedMapCash = new Map(sortedCash.map(amountToTuple))
+        const sortedMapPool = new Map(sortedPool.map(amountToTuple))
+        const encodedOperation = createLiquidation(liquidatee, sortedMapCash, sortedMapPool)
 
-        const encodedOperation = createLiquidation(
-            liquidatee,
-            new Map(mapCash),
-            new Map(mapPool),
-        )
-
+        const { lease, lastValid } = await this.getOperationParams()
         const dataToSign = getDataToSign(encodedOperation, decodeAccountId(this.accountId), lease, lastValid)
 
         const signature = await this.getOperationSigner().signMessage(dataToSign)
-
         const result = await this.accountClient.submitLiquidation(this.accountId, {
             target: liquidatee,
-            assetBasket: cash.map((amount) => ({ instrumentId: amount.instrument.id, amount })),
-            liabilityBasket: pool.map((amount) => ({ instrumentId: amount.instrument.id, amount })),
+            assetBasket: sortedCash.map((amount) => ({ instrumentId: amount.instrument.id, amount })),
+            liabilityBasket: sortedPool.map((amount) => ({ instrumentId: amount.instrument.id, amount })),
             lease, lastValid, signature,
         })
         await this.waitForConfirmation(result.id)

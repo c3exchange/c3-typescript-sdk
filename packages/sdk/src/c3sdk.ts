@@ -41,6 +41,7 @@ import {
   RawSignature,
   maxOrderExpiration,
   accountIdToUserAddress,
+  Owner,
 } from "@c3exchange/common"
 import { DepositFundsAlgorand, DepositFundsWormhole, DepositOverrides, DepositResult, SubmitWormholeVAA, WormholeDepositResult, WormholeSigner } from "./internal/types"
 import { AlgorandDeposit, WormholeDeposit } from "./internal/account_endpoints"
@@ -48,7 +49,6 @@ import { prepareAlgorandDeposit, prepareWormholeDeposit } from "./internal/helpe
 import algosdk, { waitForConfirmation } from "algosdk"
 import BigNumber from "bignumber.js"
 import { ROUNDS_TO_WAIT_ON_DEPOSIT } from "./internal/const"
-import { logger } from "ethers"
 import { Connection } from "@solana/web3.js"
 import { asInstrumentWithRiskParameters } from "./internal/helpers/parser"
 import { cryptoUtilsBuilder } from "./internal/utils/crypto"
@@ -92,16 +92,16 @@ export class C3SDK {
     this.wormholeService = new WormholeServiceImpl(getWormholeContractsByNetwork(this.config.c3_api.wormhole_network), this.algodClient)
   }
 
-  getHealth = async (): Promise<void> => {
-    await this.client.get("/health")
-  }
-
-  getInstruments = async (): Promise<InstrumentWithRiskParameters[]> => {
+  private getInstrumentCache = async (): Promise<InstrumentWithRiskParameters[]> => {
     if (!this.instrumentCache) {
       const responses = await this.client.get<InstrumentWithRiskParametersResponse[]>("/v1/instruments")
       this.instrumentCache = responses.map((instrument) => asInstrumentWithRiskParameters(instrument))
     }
-    return this.instrumentCache.slice()
+    return this.instrumentCache
+  }
+
+  getInstruments = async (): Promise<InstrumentWithRiskParameters[]> => {
+    return (await this.getInstrumentCache()).slice()
   }
 
   getInstrumentsPool = async (): Promise<InstrumentPoolInfo[]> => {
@@ -137,13 +137,14 @@ export class C3SDK {
 
   getMarkets = (): MarketsEntity => this.markets
 
-  async login <T extends MessageSigner = MessageSigner> (
-    messageSigner: T,
+  async login (
+    owner: Owner,
     accountSession?: AccountSession,
     isWebMode = false,
     operateOn?: UserAddress,
     operateOnExpiration?: UnixTimestampInSeconds,
-  ): Promise<Account<T>> {
+  ): Promise<Account> {
+    const messageSigner = owner as MessageSigner
     let encryptionKey: Uint8Array | undefined
     if (!accountSession) {
       const signature = await this._startLoginOperation(messageSigner)
@@ -177,9 +178,10 @@ export class C3SDK {
    * Only for internal use. This method is used to login with an ephemeral account
    * @returns Returns a completeLogin method that must be called to obtain the Account instance
    */
-  async _loginWithEphemeral<T extends MessageSigner = MessageSigner> (messageSigner: T, webMode = false, operateOn?: UserAddress, operateOnExpiration?: UnixTimestampInSeconds) {
+  async _loginWithEphemeral (owner: Owner, webMode = false, operateOn?: UserAddress, operateOnExpiration?: UnixTimestampInSeconds) {
+    const messageSigner = owner as MessageSigner
     const loginStartSignature: Signature = await this._startLoginOperation(messageSigner)
-    return async (): Promise<Account<T>> => {
+    return async (): Promise<Account> => {
       const ephemeralAccount = algosdk.generateAccount()
       const ephemeralAddress = ephemeralAccount.addr
       const SESSION_DURATION = 14 * 24 * 60 * 60 // 14 days
@@ -212,8 +214,8 @@ export class C3SDK {
     }
   }
 
-  private async generateAccountEntity <T extends MessageSigner = MessageSigner> (
-    messageSigner: T,
+  private async generateAccountEntity (
+    messageSigner: MessageSigner,
     accountSession: AccountSession,
     isWebMode: boolean,
     operateOn?: UserAddress,
@@ -221,7 +223,7 @@ export class C3SDK {
     ephemeralKey?: Uint8Array,
     ephemeralExpiration?: UnixTimestampInSeconds,
   ) {
-    return new Account<T>(
+    return new Account (
       this.config.c3_api,
       accountSession,
       messageSigner,
@@ -234,7 +236,7 @@ export class C3SDK {
         services: {
           wormholeService: this.wormholeService,
           algod: this.algodClient,
-          solanaConnection: new Connection(this.config.solana_cluster, "finalized")
+          solanaConnection: new Connection(this.config.solana_cluster || defaultConfig.solana_cluster || "", "finalized")
         },
       },
       {
@@ -242,7 +244,7 @@ export class C3SDK {
         operateOnExpiration, ephemeralKey, ephemeralExpiration,
       },
     );
-  } 
+  }
 
   public submitWormholeVAA: SubmitWormholeVAA = async (
     receiverAccountId: AccountId,
@@ -287,7 +289,6 @@ export class C3SDK {
             await waitForConfirmation(this.algodClient, id, roundsToWait)
             return true
           } catch (err) {
-            logger.warn("Could not wait for transaction to be completed: ", err)
             return false
          }
         },
@@ -396,10 +397,7 @@ export class C3SDK {
   }
 
   private findInstrumentOrFail = async (instrumentId: InstrumentId): Promise<Instrument> => {
-    if (!this.instrumentCache) {
-      this.instrumentCache = await this.getInstruments()
-    }
-    const instrument = this.instrumentCache.find((instrument) => instrument.id === instrumentId)
+    const instrument = (await this.getInstrumentCache()).find((instrument) => instrument.id === instrumentId)
     if (!instrument) {
       throw new Error("Invalid instrumentId")
     }
@@ -407,7 +405,6 @@ export class C3SDK {
   }
 
   private getSlotId = async (asaId: number): Promise<InstrumentSlotId> => {
-    const instruments = await this.getInstruments()
-    return getSlotId(instruments.map((i => i.asaId)), asaId)
+    return getSlotId((await this.getInstrumentCache()).map((i => i.asaId)), asaId)
   }
 }

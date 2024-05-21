@@ -38,6 +38,8 @@ interface BaseAccountOperation {
     type: AccountOperationType
     status: OperationStatus
     groupId: string
+    block: number
+    blockIndex: number
     instrumentId: InstrumentId
     amount: InstrumentAmount
     createdOn: UnixTimestamp

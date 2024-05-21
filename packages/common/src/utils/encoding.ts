@@ -942,7 +942,7 @@ export function decodeEthereumAddress(ethereumAddress: string): Uint8Array {
 }
 
 export function decodeSolanaAddress(solanaAddress: string): Uint8Array {
-    return bs58.decode(solanaAddress)
+    return new Uint8Array(bs58.decode(solanaAddress))
 }
 
 export function base16ToBase64 (hexValue: Hex): Base64 {

@@ -3,6 +3,7 @@ import { Market, createMarket } from "../interfaces"
 import { InstrumentAmount } from "./instrumentAmount"
 import { parseJSON, stringifyJSON } from "../utils/json"
 import { MarketFee } from "./marketFee"
+import { bigintAbs } from "./math"
 
 const SHIFT_MULTIPLIER = tenPower(FIXED_POINT_DECIMALS)
 const INFINITY = tenPower(FIXED_POINT_DIGITS) - BigInt(1)
@@ -172,5 +173,31 @@ export class MarketPrice {
 
     isPositive(): boolean {
         return this.raw >= BigInt(0)
+    }
+
+    minPrice(): MarketPrice {
+        const minQuoteShiftMultiplier = tenPower(FIXED_POINT_DECIMALS - this.market.baseInstrument.asaDecimals)
+        return MarketPrice.fromRaw(this.market, minQuoteShiftMultiplier)
+    }
+
+    roundToMinQuote(): MarketPrice {
+        return this.round(this.minPrice())
+    }
+
+    round(roundingPrice: MarketPrice): MarketPrice {
+        if(this.raw % roundingPrice.raw === BigInt(0))
+            return MarketPrice.fromRaw(this.market, this.raw)
+        const n = (this.raw / roundingPrice.raw)
+        const floor = n * roundingPrice.raw
+        const ceil = (n + 1n) * roundingPrice.raw
+        const floorDistance = bigintAbs(this.raw - floor)
+        const ceilDistance = bigintAbs( ceil - this.raw)
+        if(ceilDistance != floorDistance){
+            return floorDistance > ceilDistance ? MarketPrice.fromRaw(this.market, ceil) : MarketPrice.fromRaw(this.market, floor)
+        }else {
+            // Apply banker's rounding https://wiki.c2.com/?BankersRounding
+            // If floor is even, return floor, else return ceil which is even
+            return n % 2n == 1n ? MarketPrice.fromRaw(this.market, ceil) : MarketPrice.fromRaw(this.market, floor)
+        }
     }
 }

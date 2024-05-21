@@ -76,8 +76,8 @@ const C3_ACCOUNT_TYPE_UTILS: Record<C3AccountType, ChainTools> = {
     [C3_ACCOUNT_TYPE_SOLANA]: SolanaUtils,
 }
 
-const isChainIdSupported = (chainId: ChainId | number): boolean => (chainId in CHAIN_UTILS)
-const isChainNameSupported = (chainName: string | ChainName): boolean => isChainIdSupported(toChainId(chainName as ChainName))
+const isChainIdSupported = (chainId: ChainId | number): chainId is SupportedChainId => (chainId in CHAIN_UTILS)
+const isChainNameSupported = (chainName: string | ChainName): chainName is SupportedChainName => isChainIdSupported(toChainId(chainName as ChainName))
 
 function toSupportedChainId (chainId: ChainId): SupportedChainId {
     if (!isChainIdSupported(chainId)) {

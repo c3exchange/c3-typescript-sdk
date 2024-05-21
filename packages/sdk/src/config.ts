@@ -10,7 +10,7 @@ export interface AlgorandUrlConfig extends UrlConfig {
 }
 
 export interface C3SDKConfig {
-    solana_cluster: string
+    solana_cluster?: string
     algorand_node: AlgorandUrlConfig
     c3_api: UrlConfig & {
         wormhole_network: WormholeNetwork
