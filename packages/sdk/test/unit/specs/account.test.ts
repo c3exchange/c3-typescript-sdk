@@ -8,6 +8,9 @@ import { ALGORAND_ACCOUNT, ALGORAND_ACCOUNT_ID, ALGORAND_MNEMONIC, ALGO_BTC_MARK
 import { cleanMockedServer, generateMockedLogin, mockCommonEndpoints, mockedServer } from "../helpers/mock.responses"
 import * as mockdate from "mockdate"
 import crypto from "crypto"
+import { BTC_INSTRUMENT } from "../helpers/mock.resources"
+import { USDC_INSTRUMENT } from "../helpers/mock.resources"
+import { LiquidationParamsRequest } from "@c3exchange/common"
 
 // Account tests
 describe("Account tests", () => {
@@ -235,6 +238,177 @@ describe("Account tests", () => {
         expect(response.instrumentId).to.be.equal("BTC")
     })
 
+    it ("Should withdraw funds in Algorand", async () => {
+        const destinationAddress = ALGORAND_ACCOUNT.addr
+        const destinationChainName = "algorand"
+        mockedServer.post(`/v1/accounts/${accountId}/withdraw`, {
+            amount: "100",
+            instrumentId: "BTC",
+            lease: encodeBase64(operationParams.lease),
+            lastValid: operationParams.lastValid,
+            maxBorrow: "0",
+            maxFees: "0",
+            signature: "uBx/H/WnQb0Mh1P2QgDufNx0uaWr0ewCaXFIkdb76ihKAYnpOdYkuSHlSU6IghEzFaPwUib70CBcWGh+68qr+hw=",
+            destination: { address: destinationAddress, chain: destinationChainName }
+        }).reply(200, { amount: "100", instrumentId: "BTC", extraInfo: { sendTransferTxId: "0x123" } })
+        expect(account).itself.to.respondTo("withdraw")
+        const response = await account.withdraw({
+            amount: "100",
+            instrumentId: "BTC",
+            maxFees: "0",
+            maxBorrow: "0",
+            destinationAddress,
+            destinationChainName,
+        })
+        expect(response.amount.toDecimal()).to.be.equal("100")
+        expect(response.instrumentId).to.be.equal("BTC")
+    })
+
+    it ("Should fail withdrawing funds for invalid fee", async () => {
+        const destinationAddress = ETHEREUM_ACCOUNT.address
+        const destinationChainName = "ethereum"
+        expect(account).itself.to.respondTo("withdraw")
+        try {
+            await account.withdraw({
+                amount: "1",
+                instrumentId: "BTC",
+                maxFees: "2",
+                maxBorrow: "0",
+                destinationAddress,
+                destinationChainName,
+            })
+        } catch (err: any) {
+            expect(err).to.be.instanceOf(Error).and.to.haveOwnProperty("message")
+            expect(err.message).to.be.equal("Max fees must be less than the amount")
+        }
+    })
+
+    it ("Should fail withdrawing funds for invalid destination address", async () => {
+        const destinationAddress = ETHEREUM_ACCOUNT.address
+        const destinationChainName = "algorand"
+        expect(account).itself.to.respondTo("withdraw")
+        try {
+            await account.withdraw({
+                amount: "10",
+                instrumentId: "BTC",
+                maxFees: "2",
+                maxBorrow: "0",
+                destinationAddress,
+                destinationChainName,
+            })
+        } catch (err: any) {
+            expect(err).to.be.instanceOf(Error).and.to.haveOwnProperty("message")
+            expect(err.message).to.be.equal("Invalid destination address")
+        }
+    })
+
+    it ("Should fail withdrawing funds for invalid amount", async () => {
+        const destinationAddress = ETHEREUM_ACCOUNT.address
+        const destinationChainName = "ethereum"
+        expect(account).itself.to.respondTo("withdraw")
+        try {
+            await account.withdraw({
+                amount: "1",
+                instrumentId: "BTC",
+                maxFees: "-1",
+                maxBorrow: "0",
+                destinationAddress,
+                destinationChainName,
+            })
+        } catch (err: any) {
+            expect(err).to.be.instanceOf(Error).and.to.haveOwnProperty("message")
+            expect(err.message).to.be.equal("Withdraw amount, borrow amount or fee amount must be positive values")
+        }
+
+        try {
+            await account.withdraw({
+                amount: "100",
+                instrumentId: "BTC",
+                maxFees: "0",
+                maxBorrow: "-1",
+                destinationAddress,
+                destinationChainName,
+            })
+        } catch (err: any) {
+            expect(err).to.be.instanceOf(Error).and.to.haveOwnProperty("message")
+            expect(err.message).to.be.equal("Withdraw amount, borrow amount or fee amount must be positive values")
+        }
+    })
+
+    it ("Should fail withdrawing funds for invalid chain", async () => {
+        const destinationAddress = ETHEREUM_ACCOUNT.address
+        try {
+            await account.withdraw({
+                amount: "100",
+                instrumentId: "BTC",
+                maxFees: "0",
+                maxBorrow: "0",
+                destinationAddress,
+                destinationChainName: "sui",
+            })
+        } catch (err: any) {
+            expect(err).to.be.instanceOf(Error).and.to.haveOwnProperty("message")
+            expect(err.message).to.be.equal(`ChainId "21" not supported`)
+        }
+        try {
+            await account.withdraw({
+                amount: "100",
+                instrumentId: "BTC",
+                maxFees: "0",
+                maxBorrow: "0",
+                destinationAddress,
+                destinationChainName: "avalanche",
+            })
+        } catch (err: any) {
+            expect(err).to.be.instanceOf(Error).and.to.haveOwnProperty("message")
+            expect(err.message).to.be.equal(`Couldn't found the destination chain for the instrument BTC`)
+        }
+    })
+    it ("Should withdraw funds for CCTP", async () => {
+        const destinationAddress = ETHEREUM_ACCOUNT.address
+        const destinationChainName = "arbitrum"
+        mockedServer.post(`/v1/accounts/${accountId}/withdraw`, {
+            amount: "100",
+            instrumentId: "USDC_CIRCLE",
+            lease: encodeBase64(operationParams.lease),
+            lastValid: operationParams.lastValid,
+            maxBorrow: "0",
+            maxFees: "0",
+            signature: "yrAfzHlrbm8wTF4+0UfVHTkVda9zbzcMbB/BrTZsy6sh4j05RXKJEFHOhvuzmoiahVdFujbm2mwx74RUOJuZ9Bs=",
+            destination: { address: destinationAddress, chain: destinationChainName }
+        }).reply(200, { amount: "100", instrumentId: "USDC_CIRCLE", extraInfo: { sendTransferTxId: "0x123" } })
+        expect(account).itself.to.respondTo("withdraw")
+        const response = await account.withdraw({
+            amount: "100",
+            instrumentId: "USDC_CIRCLE",
+            maxFees: "0",
+            maxBorrow: "0",
+            destinationAddress,
+            destinationChainName,
+        })
+        expect(response.amount.toDecimal()).to.be.equal("100")
+        expect(response.instrumentId).to.be.equal("USDC_CIRCLE")
+    })
+
+    it ("It should fail withdrawing funds for CCTP", async () => {
+        const destinationAddress = ETHEREUM_ACCOUNT.address
+        const destinationChainName = "bsc"
+        expect(account).itself.to.respondTo("withdraw")
+        try {
+            await account.withdraw({
+                amount: "100",
+                instrumentId: "USDC_CIRCLE",
+                maxFees: "0",
+                maxBorrow: "0",
+                destinationAddress,
+                destinationChainName,
+            })
+        } catch (err: any) {
+            expect(err).to.be.instanceOf(Error).and.to.haveOwnProperty("message")
+            expect(err.message).to.be.equal("Couldn't found the destination chain for the instrument USDC_CIRCLE")
+        }
+    })
+
     it ("Should lend funds", async () => {
         const instrumentId = "BTC"
         const decimalAmount = "100"
@@ -306,6 +480,42 @@ describe("Account tests", () => {
         }).reply(200, { id: "0x123" })
         const result = await account.liquidate(accountToLiquidate, [], [])
         expect(result).to.be.a("string")
+    })
+
+    it ("Liquidate should order baskets by slotId", async () => {
+        const accountToLiquidate = ALGORAND_ACCOUNT_ID
+
+        const cashBasket: InstrumentAmount[] = []
+        mockedServer.get(`/v1/instruments`).reply(200, [
+            {"id":"ALGO","asaId":0,"asaName":"Algorand","asaUnitName":"ALGO","asaDecimals":6,"chains":[],"slotId":0,"riskParameters":{"initial":{"haircut":"0.5","margin":"0.14"},"maintenance":{"haircut":"0.43","margin":"0.08"},"optUtilization":"0.66"}},
+            {"id":"AVAX","asaId":172685586,"asaName":"Avalanche (Wormhole)","asaUnitName":"AVAX","asaDecimals":8,"chains":[{"chainId":6,"tokenAddress":"0xE654DB9dF47dfe951875a572236feD592CeC2a2b"}],"slotId":1,"riskParameters":{"initial":{"haircut":"0.5","margin":"0.19"},"maintenance":{"haircut":"0.42","margin":"0.1"},"optUtilization":"0.66"}},
+            {"id":"BTC","asaId":BTC_INSTRUMENT.asaId,"asaName":"C3 BTC","asaUnitName":"BTC","asaDecimals":8,"chains":[],"slotId":2,"riskParameters":{"initial":{"haircut":"0.13","margin":"0.11"},"maintenance":{"haircut":"0.09","margin":"0.06"},"optUtilization":"0.66"}},{"id":"ETH","asaId":122146368,"asaName":"Ether (Wormhole)","asaUnitName":"ETH","asaDecimals":8,"chains":[{"chainId":2,"tokenAddress":"0xC2347d9f61b0440369B06Af2D83A1c4b2b7Df17F"}],"slotId":3,"riskParameters":{"initial":{"haircut":"0.19","margin":"0.2"},"maintenance":{"haircut":"0.12","margin":"0.13"},"optUtilization":"0.66"}},
+            {"id":"USDC","asaId":USDC_INSTRUMENT.asaId,"asaName":"USD Coin (Wormhole)","asaUnitName":"WUSDC","asaDecimals":6,"chains":[{"chainId":6,"tokenAddress":"0x4B01CD8a125dda1331bC15146c1C26966a6574b9"},{"chainId":2,"tokenAddress":"0x7679D36F06196a0045e233Cae6DfE515D2c59A8F"}],"slotId":4,"riskParameters":{"initial":{"haircut":"0.06","margin":"0.03"},"maintenance":{"haircut":"0.01","margin":"0.01"},"optUtilization":"0.66"}},
+        ])
+
+        const usdcLiability = InstrumentAmount.fromDecimal(USDC_INSTRUMENT,"-6900.1")
+        const btcLoan = InstrumentAmount.fromDecimal(BTC_INSTRUMENT,"0.1")
+        const poolBasket = [usdcLiability, btcLoan]
+        const liquidateRequest: LiquidationParamsRequest[] = []
+        mockedServer.post(`/v1/accounts/${accountId}/liquidate`, (body) => {
+            liquidateRequest.push(body)
+            return true
+        }).reply(200, { id: "0x123" })
+        const expectedBody ={
+            lease: encodeBase64(operationParams.lease),
+            lastValid: operationParams.lastValid,
+            target: accountToLiquidate,
+            signature: "V7v5Cw58eDG10qr3hLiEiOQTPgCIW4RypbBBPYzI7L8KqVNEHSUtP2V0Q3EzDbC81wuL5Yx+F1T49df6g0FGnhs=",
+        }
+        const result = await account.liquidate(accountToLiquidate, cashBasket, poolBasket)
+        expect(liquidateRequest.length).equal(1)
+        const liquidateBody = liquidateRequest[0]
+        expect(liquidateBody.signature).equal(expectedBody.signature)
+        expect(liquidateBody.assetBasket.length).equal(0)
+        expect(liquidateBody.liabilityBasket.length).equal(2)
+        // Should reverse liability basket ordering
+        expect(liquidateBody.liabilityBasket[0].instrumentId).equal("BTC")
+        expect(liquidateBody.liabilityBasket[1].instrumentId).equal("USDC")
     })
 
     it ("Should delegate a user", async () => {

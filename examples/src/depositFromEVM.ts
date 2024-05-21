@@ -1,4 +1,4 @@
-import { C3SDK, EVMSigner } from "@c3exchange/sdk";
+import { C3SDK, createEVMOwnerFromMnemonic } from "@c3exchange/sdk";
 import { ethers } from "ethers";
 
 const TOKEN = "USDC";
@@ -17,11 +17,10 @@ const c3sdk = new C3SDK({
 const MNEMONIC = "mnemonic here";
 const providerUrl = "https://api.avax.network/ext/bc/C/rpc"
 const evmProvider = new ethers.providers.JsonRpcProvider(providerUrl)
-const wallet = ethers.Wallet.fromMnemonic(MNEMONIC).connect(evmProvider);
 
 async function accountDeposit(): Promise<void> {
 
-    const signer = new EVMSigner(wallet.address, 6, wallet);
+    const signer = createEVMOwnerFromMnemonic(MNEMONIC, evmProvider);
 
     console.log("Authenticating account");
     const accountSdk = await c3sdk.login(signer);
@@ -43,7 +42,7 @@ async function accountDeposit(): Promise<void> {
     const withdrawal = await accountSdk.withdraw({
         instrumentId: TOKEN,
         amount: AMOUNT,
-        destinationAddress: signer.address,
+        destinationAddress: accountSdk.getUserAddress(),
         destinationChainName: "ethereum",
         maxFees: "16", // Check the fees of the blockchain of choice
     });

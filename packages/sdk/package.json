@@ -1,6 +1,6 @@
 {
   "name": "@c3exchange/sdk",
-  "version": "0.5.0-alpha.2",
+  "version": "0.5.0-alpha.5",
   "description": "",
   "main": "build/src/index.js",
   "module": "build/src/index.js",
@@ -23,7 +23,8 @@
   "author": "c3.io",
   "license": "Apache-2.0",
   "dependencies": {
-    "@c3exchange/common": "^0.5.0-alpha.2",
+    "@c3exchange/common": "^0.5.0-alpha.5",
+    "@improbable-eng/grpc-web-node-http-transport": "^0.15.0",
     "algosdk": "^2.5.0",
     "axios": "^1.4.0",
     "bech32": "^1.1.4",

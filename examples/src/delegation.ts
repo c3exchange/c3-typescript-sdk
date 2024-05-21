@@ -1,5 +1,4 @@
-import { Signer } from "@c3exchange/common";
-import { C3SDK, OrderParams } from "@c3exchange/sdk";
+import { C3SDK, OrderParams, createAlgorandOwnerFromMnemonic } from "@c3exchange/sdk";
 
 const c3sdk = new C3SDK({
     c3_api: {
@@ -15,8 +14,7 @@ const Algorand_MNEMONIC = "mnemonic here"
 const DELEGATED_ACCOUNT = "address here"
 
 async function delegateAccount (): Promise<string> {
-    const signerClass = new Signer();
-    const signer = signerClass.addFromMnemonic(Algorand_MNEMONIC);
+    const signer = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC);
 
     const accountSdk = await c3sdk.login(signer);
 
@@ -32,8 +30,7 @@ async function delegateAccount (): Promise<string> {
 }
 
 async function revokeDelegation (): Promise<void> {
-    const signerClass = new Signer();
-    const signer = signerClass.addFromMnemonic(Algorand_MNEMONIC);
+    const signer = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC);
 
     const accountSdk = await c3sdk.login(signer);
 
@@ -43,8 +40,7 @@ async function revokeDelegation (): Promise<void> {
 }
 
 async function loginAndOperateWithDelegatedAccount () {
-    const signerClass = new Signer();
-    const signer = signerClass.addFromMnemonic(Algorand_MNEMONIC);
+    const signer = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC);
     const delegatedAccount = await c3sdk.login(signer, undefined, undefined, DELEGATED_ACCOUNT);
 
     /**

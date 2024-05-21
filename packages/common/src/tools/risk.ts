@@ -146,9 +146,7 @@ export function calculateMarketOrderSlippage(orderSide: OrderSide, orderPrice: M
 
 export function availableForTradePriceAdjusted(sellInfo: InstrumentWithRiskParameters, buyInfo: InstrumentWithRiskParameters, marginCalculation: Margin, orderPrice: MarketPrice , userPosition: NetUserPosition): InstrumentAmount {
 
-    const printPicoAmount = (picoPrice: BigInt) => {
-        return `${BigNumber(picoPrice.toString()).shiftedBy(-12).toNumber()} x 10e12`
-    }
+
     const sellInstrument = sellInfo as Instrument
     const buyInstrument = buyInfo as Instrument
     const sellRiskParams = sellInfo.riskParameters.initial

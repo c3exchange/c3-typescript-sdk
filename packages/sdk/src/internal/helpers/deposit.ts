@@ -5,11 +5,9 @@ import {
     AssetId,
     Base64,
     ChainName,
-    EVMSigner,
     Instrument,
     InstrumentAmount,
     InstrumentSlotId,
-    SolanaSigner,
     SystemInfoResponse,
     UserAddress,
     WormholeDictionary,
@@ -23,6 +21,8 @@ import { PublicKey, TransactionResponse } from "@solana/web3.js"
 import { getMint } from "@solana/spl-token"
 import { parseUnits } from "ethers/lib/utils"
 import { DepositResult, SubmitWormholeVAA, WormholeDepositResult, WormholeSigner } from "../types"
+import { isEVMSigner, isSolanaSigner } from "./factory"
+import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport"
 
 
 async function prepareAlgorandDeposit(
@@ -79,7 +79,7 @@ const depositAsset = async (
     xAddress: XContractAddress,
     xAsset: XAssetId,
 ): Promise<{ txReceipt: unknown, txHash: string }> => {
-    if (funderSigner instanceof EVMSigner) {
+    if (isEVMSigner(funderSigner)) {
         const decimalValue = amount.toDecimal()
         let baseAmountParsed
         if (!isNativeToken) {
@@ -109,7 +109,7 @@ const depositAsset = async (
             txReceipt = await wormholeService.createWormholeTxForEvmNetworkDeposit(...args, overrides)
         }
         return { txHash: txReceipt.transactionHash, txReceipt }
-    } else if (funderSigner instanceof SolanaSigner) {
+    } else if (isSolanaSigner(funderSigner)) {
         if (!funderSigner.connection) {
             throw new Error("Solana connection required to deposit funds")
         }
@@ -149,9 +149,9 @@ const depositAsset = async (
 }
 
 const getWormholeVAASequence = async ( funderSigner: WormholeSigner, wormholeService: WormholeService, funderChainId: ChainId, txReceipt: any): Promise<string> => {
-    if (funderSigner instanceof EVMSigner) {
+    if (isEVMSigner(funderSigner)) {
         return wormholeService.getWormholeVaaSequenceFromEthereumTx(toChainName(funderChainId), txReceipt)
-    } else if (funderSigner instanceof SolanaSigner) {
+    } else if (isSolanaSigner(funderSigner)) {
         return wormholeService.getWormholeVaaSequenceFromSolanaTx(txReceipt)
     }
     throw new Error("Unsupported signer")
@@ -204,6 +204,12 @@ async function prepareWormholeDeposit (
     let vaaSignature: Uint8Array | undefined
     let wasRedeemed = false
 
+    let rpcTransport: Record<string, unknown> | undefined = undefined
+    // @ts-ignore NodeHttpTransport is not available in the browser and it is required for the node environment
+    if (typeof window === "undefined") {
+        rpcTransport = { transport: NodeHttpTransport() }
+    }
+
     const getVAASequence = async () => {
         if (!vaaSequence) {
             vaaSequence = await getWormholeVAASequence(funderSigner, wormholeService, funderChainId, txReceipt)
@@ -211,7 +217,7 @@ async function prepareWormholeDeposit (
         return vaaSequence
     }
 
-    const waitForWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+    const waitForWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions = rpcTransport) => {
         vaaSequence = await getVAASequence()
         if (isCCTP) {
             console.warn("Ignoring waitForWormholeVAA for CCTP")
@@ -223,22 +229,26 @@ async function prepareWormholeDeposit (
         return vaaSignature
     }
 
-    const isVaaEnqueued = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+    const isVaaEnqueued = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions = rpcTransport) => {
         vaaSequence = await getVAASequence()
         return await wormholeService.isVaaEnqueued(toChainName(funderChainId), BigInt(vaaSequence), retryTimeout, maxRetryCount, rpcOptions)
     }
 
-    const isTransferCompleted = () => {
+    const isTransferCompleted: WormholeDepositResult["isTransferCompleted"] = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions = rpcTransport) => {
         if (wasRedeemed) {
-            return Promise.resolve(true)
+            return true
         }
         if (!vaaSignature) {
-            throw new Error("VAA signature is not available")
+            try {
+                vaaSignature = await waitForWormholeVAA(retryTimeout || 0, maxRetryCount || 1, rpcOptions)
+            } catch (err) {
+                return false
+            }
         }
         return wormholeService.isAlgorandTransferComplete(vaaSignature)
     }
 
-    const redeemAndSubmitWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => {
+    const redeemAndSubmitWormholeVAA = async (retryTimeout?: number, maxRetryCount?: number, rpcOptions = rpcTransport) => {
         if (isCCTP) {
             console.warn("Ignoring redeemAndSubmitWormholeVAA for CCTP")
             return ""

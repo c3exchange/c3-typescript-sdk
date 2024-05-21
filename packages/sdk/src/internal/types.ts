@@ -30,6 +30,7 @@ interface DepositResult {
 }
 
 interface WormholeDepositResult extends DepositResult {
+    isTransferCompleted: (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => Promise<boolean>
     getVAASequence: () => Promise<string>
     waitForWormholeVAA: (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => Promise<Uint8Array>
     isVaaEnqueued: (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown> )=> Promise<boolean>
@@ -51,7 +52,7 @@ type SubmitWormholeVAA = (receiverAccountId: AccountId, amount: InstrumentAmount
 
 type WithdrawResult = DepositResult
 interface WormholeWithdrawResult extends WithdrawResult {
-    isTransferCompleted: (provider?: Signer | providers.Provider | Connection) => Promise<boolean>
+    isTransferCompleted: (provider?: Signer | providers.Provider | Connection, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => Promise<boolean>
     getVAASequence: () => Promise<string>
     waitForWormholeVAA: (retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => Promise<Uint8Array>
     redeemWormholeVAA: (signer?: Signer, retryTimeout?: number, maxRetryCount?: number, rpcOptions?: Record<string, unknown>) => Promise<ContractReceipt>

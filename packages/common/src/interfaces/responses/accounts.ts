@@ -168,6 +168,8 @@ interface BaseAccountOperationResponse {
     type: AccountOperationType
     status: OperationStatus
     groupId: string
+    block: number
+    blockIndex: number
     instrumentId: InstrumentId
     amount: string
     createdOn: UnixTimestamp,

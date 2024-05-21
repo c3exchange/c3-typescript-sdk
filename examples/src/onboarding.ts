@@ -1,6 +1,5 @@
-import { Signer, CHAIN_ID_ETH, CHAIN_ID_AVAX } from "@c3exchange/common";
-import { C3SDK, EVMSigner } from "@c3exchange/sdk";
-import { Wallet } from "ethers";
+import { C3SDK, createAlgorandOwnerFromMnemonic, createEVMOwnerFromMnemonic } from "@c3exchange/sdk";
+import { ethers } from "ethers";
 
 const c3sdk = new C3SDK({
   c3_api: {
@@ -11,12 +10,13 @@ const c3sdk = new C3SDK({
     server: "https://testnet-api.algonode.cloud", // "https://mainnet-api.algonode.cloud" Mainnet node
   },
 });
+const providerUrl = "https://api.avax.network/ext/bc/C/rpc"
+const evmProvider = new ethers.providers.JsonRpcProvider(providerUrl)
 
 async function AlgorandSignerlogin() {
   const Algorand_MNEMONIC = "YOUR MNEMONIC HERE";
 
-  const signerClass = new Signer();
-  const signer = signerClass.addFromMnemonic(Algorand_MNEMONIC);
+  const signer = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC);
 
   console.log("Authenticating account");
   const accountSdk = await c3sdk.login(signer);
@@ -27,15 +27,8 @@ async function AlgorandSignerlogin() {
 async function EVMSignerLogin() {
   const EVM_MNEMONIC = "YOUR MNEMONIC HERE";
 
-  // EVM WALLET LOGIN METHOD:
-  const ethersAccount = Wallet.fromMnemonic(EVM_MNEMONIC);
-
   // choose which EVM chain to use (womrhole chain id)
-  const signer = new EVMSigner(
-    ethersAccount.address,
-    CHAIN_ID_ETH,
-    ethersAccount
-  );
+  const signer = createEVMOwnerFromMnemonic(EVM_MNEMONIC, evmProvider)
 
   console.log("Authenticating account");
   const accountSdk = await c3sdk.login(signer);

@@ -45,8 +45,7 @@ const c3sdk = new C3SDK({
 _Authentification_
 
 ```javascript
-  const signerClass = new Signer();
-  const signer = signerClass.addFromMnemonic(Algorand_MNEMONIC); //signer can also be an EVM signer, check examples folder
+  const signer = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC); //signer can also be an EVM signer, check examples folder
 
   console.log("Authenticating account");
   const accountSdk = await c3sdk.login(signer);

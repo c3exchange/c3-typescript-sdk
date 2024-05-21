@@ -295,6 +295,6 @@ export class WormholeDictionary {
     }
 
     public isCctpWithdraw(instrument: Instrument, destinationChain: ChainName): boolean {
-        return (instrument.asaId === this.getAvaxUsdcAsaId()) && (toChainId(destinationChain) !== this.getCCTPHubChainId())
+        return (instrument.asaId === this.getAvaxUsdcAsaId()) && (toChainId(destinationChain) !== this.getCCTPHubChainId()) && (this.isValidCCTPChain(destinationChain));
     }
 }

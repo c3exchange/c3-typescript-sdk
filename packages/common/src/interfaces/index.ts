@@ -6,3 +6,6 @@ export * from "./entities"
 export * from "./sdk"
 export * from "./system"
 export * from "./websocket"
+export * from "./error_helpers"
+export * from "./errors"
+

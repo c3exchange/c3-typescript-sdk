@@ -1,5 +1,4 @@
-import { Signer } from "@c3exchange/common";
-import { C3SDK, OrderParams } from "@c3exchange/sdk";
+import { C3SDK, createAlgorandOwnerFromMnemonic } from "@c3exchange/sdk";
 
 const Algorand_MNEMONIC = "mnemonic here";
 
@@ -14,8 +13,7 @@ const c3sdk = new C3SDK({
 });
 
 async function listOrders(): Promise<void> {
-  const signerClass = new Signer();
-  const signer = signerClass.addFromMnemonic(Algorand_MNEMONIC);
+  const signer = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC);
 
   console.log("Authenticating account");
   const accountSdk = await c3sdk.login(signer);

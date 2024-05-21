@@ -1,4 +1,4 @@
-import { ALGO_INSTRUMENT, CHAIN_ID_ETH, Instrument, InstrumentAmount, Market, MarketPrice, InstrumentWithRiskParametersResponse, RiskParametersResponse, encodeAccountId, getPublicKeyByAddress, userAddressToAccountId } from "@c3exchange/common";
+import { ALGO_INSTRUMENT, CHAIN_ID_ETH, Instrument, InstrumentAmount, Market, MarketPrice, InstrumentWithRiskParametersResponse, RiskParametersResponse, encodeAccountId, getPublicKeyByAddress, userAddressToAccountId, CHAIN_ID_AVAX } from "@c3exchange/common";
 import { MarketInfo } from "../../../src/internal/helpers/parser";
 import algosdk, { decodeAddress } from "algosdk";
 import * as ethers from "ethers";
@@ -23,6 +23,18 @@ const USDC_INSTRUMENT: Instrument = {
     chains: [{
         chainId: CHAIN_ID_ETH,
         tokenAddress: "0x1c3f1A342c8D9591D9759220d114C685FD1cF6b8",
+    }]
+}
+
+const USDC_CCTP_INSTRUMENT: Instrument = {
+    id: "USDC_CIRCLE",
+    asaId: 1007352535,
+    asaName: "USD Coin",
+    asaUnitName: "USDC",
+    asaDecimals: 6,
+    chains: [{
+        chainId: CHAIN_ID_AVAX,
+        tokenAddress: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
     }]
 }
 
@@ -79,6 +91,7 @@ const instruments: InstrumentWithRiskParametersResponse[] = [
     { ...ALGO_INSTRUMENT, slotId: 0, riskParameters: { initial: riskParams, maintenance: riskParams, optUtilization: "0.5" } },
     { ...BTC_INSTRUMENT, slotId: 1, riskParameters: { initial: riskParams, maintenance: riskParams, optUtilization: "0.5" } },
     { ...USDC_INSTRUMENT, slotId: 2, riskParameters: { initial: riskParams, maintenance: riskParams, optUtilization: "0.5" } },
+    { ...USDC_CCTP_INSTRUMENT, slotId: 3, riskParameters: { initial: riskParams, maintenance: riskParams, optUtilization: "0"} },
 ]
 
 const ALGORAND_MNEMONIC = "popular bounce slot object pet panic van zero split bachelor trust dwarf birth hour razor drum permit earn reduce robot tortoise file bundle ability online"
@@ -95,6 +108,7 @@ export {
     ALGO_INSTRUMENT,
     BTC_INSTRUMENT,
     USDC_INSTRUMENT,
+    USDC_CCTP_INSTRUMENT,
     BTC_USDC_MARKET,
     BTC_USDC_MARKET_INFO,
     ALGO_USDC_MARKET,
