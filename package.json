@@ -14,7 +14,7 @@
     "postinstall": "npm run check-deps"
   },
   "dependencies": {
-    "@certusone/wormhole-sdk": "^0.9.23",
+    "@certusone/wormhole-sdk": "^0.10.9",
     "algosdk": "^2.5.0",
     "bignumber.js": "^9.1.1",
     "denque": "^2.0.1",
