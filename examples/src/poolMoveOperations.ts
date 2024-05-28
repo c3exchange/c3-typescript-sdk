@@ -58,7 +58,7 @@ async function borrowAndRepayAssets(): Promise<void> {
   console.log("Authenticating account");
   const accountSdk = await c3sdk.login(signer);
 
-  // Borrow inside Withdraw
+  // Borrow within Withdraw
   console.log(`Borrowing maximum ${WITHDRAW_MAX_BORROW} ${TOKEN} while Withdrawing ${WITHDRAW_AMOUNT} ${TOKEN}`);
   const withdrawal = await accountSdk.withdraw({
     instrumentId: TOKEN,
@@ -70,8 +70,8 @@ async function borrowAndRepayAssets(): Promise<void> {
   });
   console.log(`Withdrawal Complete: ${await withdrawal.isTransferCompleted()}`);
 
-  // Borrow inside Order
-  console.log(`Borrowing maximum ${ORDER_MAX_BORROW} ${TOKEN} in an Order`);
+  // Borrow within Order
+  console.log(`Borrowing maximum ${ORDER_MAX_BORROW} ${TOKEN} within an Order`);
   const orderWithBorrow: OrderParams = {
     marketId: MARKET,
     type: ORDER_TYPE,
@@ -88,7 +88,7 @@ async function borrowAndRepayAssets(): Promise<void> {
   const repayOperationId = await accountSdk.repay(TOKEN, REPAY_AMOUNT);
   console.log(`Repay Complete: ${repayOperationId}`, "\n");
 
-  // Repay inside Deposit
+  // Repay within Deposit
   console.log(`Repaying ${REPAY_AMOUNT} ${TOKEN} while Depositing ${DEPOSIT_AMOUNT} ${TOKEN}`);
   const deposit = await accountSdk.deposit({
     instrumentId: TOKEN,
@@ -98,8 +98,8 @@ async function borrowAndRepayAssets(): Promise<void> {
   });
   console.log(`Deposit with Repay Complete: ${await deposit.isTransferCompleted()}`);
 
-  // Repay inside Order
-  console.log(`Repaying max ${ORDER_MAX_REPAY} ${TOKEN} in an Order`);
+  // Repay within Order
+  console.log(`Repaying max ${ORDER_MAX_REPAY} ${TOKEN} within an Order`);
   const orderWithRepay: OrderParams = {
     marketId: MARKET,
     type: ORDER_TYPE,
