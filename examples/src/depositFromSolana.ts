@@ -1,8 +1,8 @@
-import { C3SDK, createEVMOwnerFromMnemonic } from "@c3exchange/sdk";
-import { ethers } from "ethers";
+import { C3SDK, createSolanaFunderFromMnemonic, createSolanaFunderFromPrivateKey } from "@c3exchange/sdk";
+import { Connection } from "@solana/web3.js"
 
-const TOKEN = "USDC";
-const AMOUNT = "1000";
+const TOKEN = "SOL";
+const AMOUNT = "1";
 
 const c3sdk = new C3SDK({
     c3_api: {
@@ -15,12 +15,13 @@ const c3sdk = new C3SDK({
 });
 
 const MNEMONIC = "mnemonic here";
-const providerUrl = "https://api.avax.network/ext/bc/C/rpc"
-const evmProvider = new ethers.providers.JsonRpcProvider(providerUrl)
+const providerUrl = "https://api.devnet.solana.com" // "https://api.mainnet.solana.com" Mainnet provider
+
 
 async function accountDeposit(): Promise<void> {
 
-    const signer = createEVMOwnerFromMnemonic(MNEMONIC, evmProvider);
+    // const signer = createSolanaFunderFromPrivateKey(PRIVATE_KEY, new Connection(providerUrl));
+    const signer = createSolanaFunderFromMnemonic(MNEMONIC, new Connection(providerUrl));
 
     console.log("Authenticating account");
     const accountSdk = await c3sdk.login(signer);
