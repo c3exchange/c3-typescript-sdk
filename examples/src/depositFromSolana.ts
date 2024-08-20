@@ -1,5 +1,6 @@
 import { C3SDK, createSolanaFunderFromMnemonic, createSolanaFunderFromPrivateKey } from "@c3exchange/sdk";
 import { Connection } from "@solana/web3.js"
+import { base58 } from "ethers/lib/utils";
 
 const TOKEN = "SOL";
 const AMOUNT = "1";
@@ -15,12 +16,14 @@ const c3sdk = new C3SDK({
 });
 
 const MNEMONIC = "mnemonic here";
+const PRIVATE_KEY = "private key here";
 const providerUrl = "https://api.devnet.solana.com" // "https://api.mainnet.solana.com" Mainnet provider
 
 
 async function accountDeposit(): Promise<void> {
 
-    // const signer = createSolanaFunderFromPrivateKey(PRIVATE_KEY, new Connection(providerUrl));
+    // const pkDecoded = base58.decode(PRIVATE_KEY);
+    // const signer = createSolanaFunderFromPrivateKey(pkDecoded, new Connection(providerUrl));
     const signer = createSolanaFunderFromMnemonic(MNEMONIC, new Connection(providerUrl));
 
     console.log("Authenticating account");
@@ -30,6 +33,7 @@ async function accountDeposit(): Promise<void> {
 
     const deposit = await accountSdk.deposit({
         instrumentId: TOKEN,
+        chainName: "solana",
         amount: AMOUNT,
         funder: signer,
     });
@@ -44,8 +48,8 @@ async function accountDeposit(): Promise<void> {
         instrumentId: TOKEN,
         amount: AMOUNT,
         destinationAddress: accountSdk.getUserAddress(),
-        destinationChainName: "ethereum",
-        maxFees: "16", // Check the fees of the blockchain of choice
+        destinationChainName: "solana",
+        maxFees: "0.004", // Check the fees of the blockchain of choice
     });
 
     console.log(`Withdrawal Complete: ${await withdrawal.isTransferCompleted()}`);
