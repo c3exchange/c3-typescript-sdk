@@ -7,7 +7,7 @@ const AMOUNT = "1000";
 const c3sdk = new C3SDK({
     c3_api: {
         server: "https://api.test.c3.io", // "https://api.c3.io" Mainnet api
-        wormhole_network: "TESTNET",
+        wormhole_network: "TESTNET",      // MAINNET
     },
     algorand_node: {
         server: "https://testnet-api.algonode.cloud", // "https://mainnet-api.algonode.cloud" Mainnet node
@@ -15,7 +15,7 @@ const c3sdk = new C3SDK({
 });
 
 const MNEMONIC = "mnemonic here";
-const providerUrl = "https://api.avax.network/ext/bc/C/rpc"
+const providerUrl = "https://api.avax-test.network/ext/bc/C/rpc"; // "https://api.avax.network/ext/bc/C/rpc" Mainnet RPC
 const evmProvider = new ethers.providers.JsonRpcProvider(providerUrl)
 
 async function accountDeposit(): Promise<void> {
@@ -29,6 +29,7 @@ async function accountDeposit(): Promise<void> {
 
     const deposit = await accountSdk.deposit({
         instrumentId: TOKEN,
+        chainName: "ethereum",
         amount: AMOUNT,
         funder: signer,
     });
