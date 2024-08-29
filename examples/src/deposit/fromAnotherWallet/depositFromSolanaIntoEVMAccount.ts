@@ -1,4 +1,4 @@
-import { login, getC3SDK, getFunder } from "../utils/utils";
+import { login, getC3SDK, getFunder } from "../../utils/utils";
 
 // one of: "ethereum","sepolia","avalanche","arbitrum","bsc","optimism","base","polygon"
 const EVM_CHAIN_NAME = "arbitrum";

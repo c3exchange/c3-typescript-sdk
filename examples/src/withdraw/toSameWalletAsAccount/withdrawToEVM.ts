@@ -1,4 +1,4 @@
-import { login, getC3SDK } from "../utils/utils";
+import { login, getC3SDK } from "../../utils/utils";
 
 // chainName has to be one of:
 // "ethereum","sepolia","avalanche","arbitrum","bsc","optimism","base","polygon"

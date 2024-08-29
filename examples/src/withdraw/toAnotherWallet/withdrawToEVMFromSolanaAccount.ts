@@ -1,5 +1,5 @@
 import { WormholeWithdrawResult } from "@c3exchange/sdk";
-import { login, getC3SDK, getProviderOrConnection } from "../utils/utils";
+import { login, getC3SDK, getProviderOrConnection } from "../../utils/utils";
 import { JsonRpcProvider } from "@ethersproject/providers";
 
 const Solana_MNEMONIC = "YOUR MNEMONIC HERE";
@@ -17,6 +17,7 @@ async function withdrawToEVMFromSolanaAccount(): Promise<void> {
   // Login to the Solana account
   console.log("Authenticating account");
   const accountSdk = await login(c3sdk, Solana_MNEMONIC, "solana");
+  console.log(accountSdk);
 
   console.log(`Withdrawing ${AMOUNT} ${TOKEN}`);
   const withdrawal = (await accountSdk.withdraw({

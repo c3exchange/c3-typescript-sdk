@@ -1,4 +1,4 @@
-import { login, getC3SDK, getFunder } from "../utils/utils";
+import { login, getC3SDK, getFunder } from "../../utils/utils";
 
 const Solana_MNEMONIC = "YOUR MNEMONIC HERE";
 
@@ -6,7 +6,7 @@ const TOKEN = "USDC";
 const AMOUNT = "1000";
 
 // one of: "ethereum","sepolia","avalanche","arbitrum","bsc","optimism","base","polygon"
-const EVM_CHAIN_NAME = "arbitrum";
+const EVM_CHAIN_NAME = "arbitrum"; // "CHAIN NAME HERE";
 const FUNDER_EVM_MNEMONIC = "MNEMONIC HERE";
 
 async function depositFromEVMIntoSolanaAccount(): Promise<void> {

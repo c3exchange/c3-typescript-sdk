@@ -22,19 +22,21 @@
         "borrow": "ts-node src/poolMoves/borrow",
         "repay": "ts-node src/poolMoves/repay",
 
-        "depositFromAlgorand": "ts-node src/deposit/depositFromAlgorand",
-        "depositFromArbitrum": "ts-node src/deposit/depositFromArbitrum",
-        "depositFromEVM": "ts-node src/deposit/depositFromEVM",
-        "depositFromSolana": "ts-node src/deposit/depositFromSolana",
-        "depositFromEVMIntoSolanaAccount": "ts-node src/deposit/depositFromEVMIntoSolanaAccount",
-        "depositFromSolanaIntoEVMAccount": "ts-node src/deposit/depositFromSolanaIntoEVMAccount",
+        "depositAlgorand": "ts-node src/deposit/fromSameWalletAsAccount/depositAlgorand",
+        "depositArbitrum": "ts-node src/deposit/fromSameWalletAsAccount/depositArbitrum",
+        "depositEVM": "ts-node src/deposit/fromSameWalletAsAccount/depositEVM",
+        "depositSolana": "ts-node src/deposit/fromSameWalletAsAccount/depositSolana",
+        "depositFromEVMIntoSolanaAccount": "ts-node src/deposit/fromAnotherWallet/depositFromEVMIntoSolanaAccount",
+        "depositFromSolanaIntoEVMAccount": "ts-node src/deposit/fromAnotherWallet/depositFromSolanaIntoEVMAccount",
+        "baseDepositFromAnotherWallet": "ts-node src/deposit/fromAnotherWallet/baseDepositFromAnotherWallet",
 
-        "withdrawToAlgorand": "ts-node src/withdraw/withdrawToAlgorand",
-        "withdrawToArbitrum": "ts-node src/withdraw/withdrawToArbitrum",
-        "withdrawToEVM": "ts-node src/withdraw/withdrawToEVM",
-        "withdrawToSolana": "ts-node src/withdraw/withdrawToSolana",
-        "withdrawToEVMFromSolanaAccount": "ts-node src/withdraw/withdrawToEVMFromSolanaAccount",
-        "withdrawToSolanaFromEVMAccount": "ts-node src/withdraw/withdrawToSolanaFromEVMAccount"
+        "withdrawToAlgorand": "ts-node src/withdraw/toSameWalletAsAccount/withdrawToAlgorand",
+        "withdrawToArbitrum": "ts-node src/withdraw/toSameWalletAsAccount/withdrawToArbitrum",
+        "withdrawToEVM": "ts-node src/withdraw/toSameWalletAsAccount/withdrawToEVM",
+        "withdrawToSolana": "ts-node src/withdraw/toSameWalletAsAccount/withdrawToSolana",
+        "withdrawToEVMFromSolanaAccount": "ts-node src/withdraw/toAnotherWallet/withdrawToEVMFromSolanaAccount",
+        "withdrawToSolanaFromEVMAccount": "ts-node src/withdraw/toAnotherWallet/withdrawToSolanaFromEVMAccount",
+        "baseWithdrawToAnotherWallet": "ts-node src/withdraw/toAnotherWallet/baseWithdrawToAnotherWallet"
     },
     "repository": {
         "type": "git",

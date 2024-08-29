@@ -1,5 +1,5 @@
 import { WormholeWithdrawResult } from "@c3exchange/sdk";
-import { login, getC3SDK, getProviderOrConnection } from "../utils/utils";
+import { login, getC3SDK, getProviderOrConnection } from "../../utils/utils";
 import { Connection } from "@solana/web3.js";
 
 // one of: "ethereum","sepolia","avalanche","arbitrum","bsc","optimism","base","polygon"

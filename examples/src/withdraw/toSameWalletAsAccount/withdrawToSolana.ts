@@ -1,4 +1,4 @@
-import { login, getC3SDK } from "../utils/utils";
+import { login, getC3SDK } from "../../utils/utils";
 
 const CHAIN_NAME = "solana";
 const Solana_MNEMONIC = "YOUR MNEMONIC HERE";
