@@ -5,11 +5,36 @@
     "scripts": {
         "clean": "rimraf ./build",
         "build": "npm run clean && tsc",
-        "onboarding": "ts-node src/onboarding",
-        "depositWithdraw": "ts-node src/depositWithdraw",
-        "createOrders": "ts-node src/createOrders",
-        "cancelOrders": "ts-node src/cancelOrders",
-        "listOrders": "ts-node src/listOrders"
+        "loginAlgorand": "ts-node src/login/loginAlgorand",
+        "loginEVM": "ts-node src/login/loginEVM",
+        "loginSolana": "ts-node src/login/loginSolana",
+        
+        "addDelegation": "ts-node src/delegations/addDelegation",
+        "operateWithDelegation": "ts-node src/delegations/operateWithDelegation",
+        "revokeDelegation": "ts-node src/delegations/revokeDelegation",
+
+        "cancelOrders": "ts-node src/orders/cancelOrders",
+        "createOrders": "ts-node src/orders/createOrders",
+        "listOrders": "ts-node src/orders/listOrders",
+
+        "lend": "ts-node src/poolMoves/lend",
+        "redeem": "ts-node src/poolMoves/redeem",
+        "borrow": "ts-node src/poolMoves/borrow",
+        "repay": "ts-node src/poolMoves/repay",
+
+        "depositFromAlgorand": "ts-node src/deposit/depositFromAlgorand",
+        "depositFromArbitrum": "ts-node src/deposit/depositFromArbitrum",
+        "depositFromEVM": "ts-node src/deposit/depositFromEVM",
+        "depositFromSolana": "ts-node src/deposit/depositFromSolana",
+        "depositFromEVMIntoSolanaAccount": "ts-node src/deposit/depositFromEVMIntoSolanaAccount",
+        "depositFromSolanaIntoEVMAccount": "ts-node src/deposit/depositFromSolanaIntoEVMAccount",
+
+        "withdrawToAlgorand": "ts-node src/withdraw/withdrawToAlgorand",
+        "withdrawToArbitrum": "ts-node src/withdraw/withdrawToArbitrum",
+        "withdrawToEVM": "ts-node src/withdraw/withdrawToEVM",
+        "withdrawToSolana": "ts-node src/withdraw/withdrawToSolana",
+        "withdrawToEVMFromSolanaAccount": "ts-node src/withdraw/withdrawToEVMFromSolanaAccount",
+        "withdrawToSolanaFromEVMAccount": "ts-node src/withdraw/withdrawToSolanaFromEVMAccount"
     },
     "repository": {
         "type": "git",
