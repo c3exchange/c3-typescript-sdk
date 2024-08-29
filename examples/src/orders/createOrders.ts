@@ -1,32 +1,22 @@
-import { C3SDK, OrderParams, createAlgorandOwnerFromMnemonic } from "@c3exchange/sdk";
+import { OrderParams } from "@c3exchange/sdk";
+import { login, getC3SDK } from "../utils/utils";
 
-const Algorand_MNEMONIC = "mnemonic here"
+const CHAIN_NAME = "CHAIN NAME HERE";
+const MNEMONIC = "YOUR MNEMONIC HERE";
 
-
-const MARKET = "  BTC-USDC";
+const MARKET = "BTC-USDC";
 const ORDER_TYPE = "limit";
 const ORDER_SIDE = "sell";
-const ORDER_PRICE = "45000.01";
+const ORDER_PRICE = "60000";
 const ORDER_AMOUNT = "0.1";
 
-const c3sdk = new C3SDK({
-  c3_api: {
-    server: "https://api.test.c3.io", // "https://api.c3.io" Mainnet api
-    wormhole_network: "TESTNET",
-  },
-  algorand_node: {
-    server: "https://testnet-api.algonode.cloud", // "https://mainnet-api.algonode.cloud" Mainnet node
-  },
-});
-
 async function createOrders(): Promise<void> {
-  const signer = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC);
+  const c3sdk = getC3SDK();
 
   console.log("Authenticating account");
-  const accountSdk = await c3sdk.login(signer);
+  const accountSdk = await login(c3sdk, MNEMONIC, CHAIN_NAME);
 
   console.log("Submitting 1 order");
-
   const firsOrder: OrderParams = {
     type: ORDER_TYPE,
     side: ORDER_SIDE,
@@ -41,8 +31,7 @@ async function createOrders(): Promise<void> {
   const orderResult = await accountSdk.createOrder(firsOrder);
   console.log(`Submitted order: ${orderResult.id}`);
 
-  //console.log('Submitting batched orders')
-
+  console.log("Submitting batched orders");
   const batchedOrders: OrderParams[] = [
     {
       type: ORDER_TYPE,
@@ -67,7 +56,7 @@ async function createOrders(): Promise<void> {
     },
   ];
   // to-do // This feature will be available in the next SDK version.
-  // const ordersResult = await accountSdk.createOrders(firsOrder)
+  const ordersResult = await accountSdk.createOrders(MARKET, batchedOrders);
 }
 
 createOrders().catch((error) => console.log("Error in execution.", error));

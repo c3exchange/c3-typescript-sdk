@@ -5,11 +5,38 @@
     "scripts": {
         "clean": "rimraf ./build",
         "build": "npm run clean && tsc",
-        "onboarding": "ts-node src/onboarding",
-        "depositWithdraw": "ts-node src/depositWithdraw",
-        "createOrders": "ts-node src/createOrders",
-        "cancelOrders": "ts-node src/cancelOrders",
-        "listOrders": "ts-node src/listOrders"
+        "loginAlgorand": "ts-node src/login/loginAlgorand",
+        "loginEVM": "ts-node src/login/loginEVM",
+        "loginSolana": "ts-node src/login/loginSolana",
+        
+        "addDelegation": "ts-node src/delegations/addDelegation",
+        "operateWithDelegation": "ts-node src/delegations/operateWithDelegation",
+        "revokeDelegation": "ts-node src/delegations/revokeDelegation",
+
+        "cancelOrders": "ts-node src/orders/cancelOrders",
+        "createOrders": "ts-node src/orders/createOrders",
+        "listOrders": "ts-node src/orders/listOrders",
+
+        "lend": "ts-node src/poolMoves/lend",
+        "redeem": "ts-node src/poolMoves/redeem",
+        "borrow": "ts-node src/poolMoves/borrow",
+        "repay": "ts-node src/poolMoves/repay",
+
+        "depositAlgorand": "ts-node src/deposit/fromSameWalletAsAccount/depositAlgorand",
+        "depositArbitrum": "ts-node src/deposit/fromSameWalletAsAccount/depositArbitrum",
+        "depositEVM": "ts-node src/deposit/fromSameWalletAsAccount/depositEVM",
+        "depositSolana": "ts-node src/deposit/fromSameWalletAsAccount/depositSolana",
+        "depositFromEVMIntoSolanaAccount": "ts-node src/deposit/fromAnotherWallet/depositFromEVMIntoSolanaAccount",
+        "depositFromSolanaIntoEVMAccount": "ts-node src/deposit/fromAnotherWallet/depositFromSolanaIntoEVMAccount",
+        "baseDepositFromAnotherWallet": "ts-node src/deposit/fromAnotherWallet/baseDepositFromAnotherWallet",
+
+        "withdrawToAlgorand": "ts-node src/withdraw/toSameWalletAsAccount/withdrawToAlgorand",
+        "withdrawToArbitrum": "ts-node src/withdraw/toSameWalletAsAccount/withdrawToArbitrum",
+        "withdrawToEVM": "ts-node src/withdraw/toSameWalletAsAccount/withdrawToEVM",
+        "withdrawToSolana": "ts-node src/withdraw/toSameWalletAsAccount/withdrawToSolana",
+        "withdrawToEVMFromSolanaAccount": "ts-node src/withdraw/toAnotherWallet/withdrawToEVMFromSolanaAccount",
+        "withdrawToSolanaFromEVMAccount": "ts-node src/withdraw/toAnotherWallet/withdrawToSolanaFromEVMAccount",
+        "baseWithdrawToAnotherWallet": "ts-node src/withdraw/toAnotherWallet/baseWithdrawToAnotherWallet"
     },
     "repository": {
         "type": "git",
@@ -31,7 +58,7 @@
         "typescript": "^5.2.2"
     },
     "dependencies": {
-        "@c3exchange/sdk": "^0.5.0-alpha.5",
+        "@c3exchange/sdk": "^0.6.1-alpha.1",
         "ethers": "^5.7.2"
     }
 }
