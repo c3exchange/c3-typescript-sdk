@@ -1,6 +1,7 @@
 import { login, getC3SDK } from "../utils/utils";
 
 const CHAIN_NAME = "CHAIN NAME HERE";
+const MNEMONIC = "YOUR MNEMONIC HERE";
 
 const MARKET = "ETH-USDC";
 
@@ -8,7 +9,7 @@ async function listOrders(): Promise<void> {
   const c3sdk = getC3SDK();
 
   console.log("Authenticating account");
-  const accountSdk = await login(c3sdk, CHAIN_NAME);
+  const accountSdk = await login(c3sdk, MNEMONIC, CHAIN_NAME);
 
   console.log("Getting orders");
   const allOrders = await accountSdk.getOrders();

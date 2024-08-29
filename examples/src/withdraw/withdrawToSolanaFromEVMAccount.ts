@@ -2,6 +2,10 @@ import { WormholeWithdrawResult } from "@c3exchange/sdk";
 import { login, getC3SDK, getProviderOrConnection } from "../utils/utils";
 import { Connection } from "@solana/web3.js";
 
+// one of: "ethereum","sepolia","avalanche","arbitrum","bsc","optimism","base","polygon"
+const EVM_CHAIN_NAME = "arbitrum";
+const EVM_MNEMONIC = "YOUR MNEMONIC HERE";
+
 const TOKEN = "SOL";
 const AMOUNT = "1";
 
@@ -12,7 +16,7 @@ async function withdrawToSolanaFromEVMAccount(): Promise<void> {
 
   // Login to the EVM account
   console.log("Authenticating account");
-  const accountSdk = await login(c3sdk, "arbitrum");
+  const accountSdk = await login(c3sdk, EVM_MNEMONIC, EVM_CHAIN_NAME);
 
   console.log(`Withdrawing ${AMOUNT} ${TOKEN}`);
   const withdrawal = (await accountSdk.withdraw({

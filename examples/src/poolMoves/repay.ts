@@ -2,6 +2,7 @@ import { OrderParams } from "@c3exchange/sdk";
 import { login, getC3SDK } from "../utils/utils";
 
 const CHAIN_NAME = "CHAIN NAME HERE";
+const MNEMONIC = "YOUR MNEMONIC HERE";
 
 const TOKEN = "ALGO";
 const REPAY_AMOUNT = "1.00";
@@ -19,7 +20,7 @@ async function repayAssets(): Promise<void> {
   const c3sdk = getC3SDK();
 
   console.log("Authenticating account");
-  const accountSdk = await login(c3sdk, CHAIN_NAME);
+  const accountSdk = await login(c3sdk, MNEMONIC, CHAIN_NAME);
 
   // Repay directly
   console.log(`Repaying ${REPAY_AMOUNT} ${TOKEN}`);

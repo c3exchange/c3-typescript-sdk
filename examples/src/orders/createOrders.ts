@@ -2,6 +2,7 @@ import { OrderParams } from "@c3exchange/sdk";
 import { login, getC3SDK } from "../utils/utils";
 
 const CHAIN_NAME = "CHAIN NAME HERE";
+const MNEMONIC = "YOUR MNEMONIC HERE";
 
 const MARKET = "BTC-USDC";
 const ORDER_TYPE = "limit";
@@ -13,7 +14,7 @@ async function createOrders(): Promise<void> {
   const c3sdk = getC3SDK();
 
   console.log("Authenticating account");
-  const accountSdk = await login(c3sdk, CHAIN_NAME);
+  const accountSdk = await login(c3sdk, MNEMONIC, CHAIN_NAME);
 
   console.log("Submitting 1 order");
   const firsOrder: OrderParams = {

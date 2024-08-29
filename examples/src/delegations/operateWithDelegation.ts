@@ -1,13 +1,14 @@
 import { OrderParams, createAlgorandOwnerFromMnemonic } from "@c3exchange/sdk";
-import { getC3SDK } from "../utils/utils";
+import { getC3SDK, getOwner } from "../utils/utils";
 
-const Algorand_MNEMONIC = "YOUR MNEMONIC HERE";
+const CHAIN_NAME = "CHAIN NAME HERE";
+const MNEMONIC = "YOUR MNEMONIC HERE";
 const DELEGATED_ACCOUNT = "ADDRESS HERE";
 
 async function loginAndOperateWithDelegatedAccount() {
   const c3sdk = getC3SDK();
 
-  const owner = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC);
+  const owner = getOwner(CHAIN_NAME, MNEMONIC);
 
   const delegatedAccount = await c3sdk.login(
     owner,

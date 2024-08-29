@@ -10,11 +10,6 @@ import {
 import { ethers } from "ethers";
 import { Connection } from "@solana/web3.js";
 
-// Mnemonics
-const Algorand_MNEMONIC = "YOUR MNEMONIC HERE";
-const EVM_MNEMONIC = "YOUR MNEMONIC HERE";
-const Solana_MNEMONIC = "YOUR MNEMONIC HERE";
-
 // C3SDK
 export const getC3SDK = () =>
   new C3SDK({
@@ -64,19 +59,22 @@ const evmProvider = (chainName: string) => {
   }
 };
 
-export const login = async (c3sdk: C3SDK, chainName: string) => {
+// Utility functions
+
+export const login = async (
+  c3sdk: C3SDK,
+  mnemonic: string,
+  chainName: string
+) => {
   if (chainName === "algorand") {
-    const owner = createAlgorandOwnerFromMnemonic(Algorand_MNEMONIC);
+    const owner = createAlgorandOwnerFromMnemonic(mnemonic);
     return await c3sdk.login(owner);
   } else if (chainName === "solana") {
-    const owner = createSolanaOwnerFromMnemonic(
-      Solana_MNEMONIC,
-      Solana_CONNECTION
-    );
+    const owner = createSolanaOwnerFromMnemonic(mnemonic, Solana_CONNECTION);
     return await c3sdk.login(owner);
   } else if (evmChains.includes(chainName)) {
     const provider = evmProvider(chainName);
-    const owner = createEVMOwnerFromMnemonic(EVM_MNEMONIC, provider);
+    const owner = createEVMOwnerFromMnemonic(mnemonic, provider);
     return await c3sdk.login(owner);
   } else {
     throw new Error("Invalid chain name");
@@ -90,8 +88,20 @@ export const getFunder = (chainName: string, funderMnemonic: string) => {
     return createSolanaFunderFromMnemonic(funderMnemonic, Solana_CONNECTION);
   } else if (evmChains.includes(chainName)) {
     const provider = evmProvider(chainName);
-    if (provider === null) return;
     return createEVMFunderFromMnemonic(funderMnemonic, provider);
+  } else {
+    throw new Error("Invalid chain name");
+  }
+};
+
+export const getOwner = (chainName: string, ownerMnemonic: string) => {
+  if (chainName === "algorand") {
+    return createAlgorandOwnerFromMnemonic(ownerMnemonic);
+  } else if (chainName === "solana") {
+    return createSolanaOwnerFromMnemonic(ownerMnemonic, Solana_CONNECTION);
+  } else if (evmChains.includes(chainName)) {
+    const provider = evmProvider(chainName);
+    return createEVMOwnerFromMnemonic(ownerMnemonic, provider);
   } else {
     throw new Error("Invalid chain name");
   }

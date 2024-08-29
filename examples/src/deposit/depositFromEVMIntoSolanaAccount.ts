@@ -1,25 +1,29 @@
 import { login, getC3SDK, getFunder } from "../utils/utils";
 
+const Solana_MNEMONIC = "YOUR MNEMONIC HERE";
+
 const TOKEN = "USDC";
 const AMOUNT = "1000";
 
-const FUNDER_ARBITRUM_MNEMONIC = "MNEMONIC HERE";
+// one of: "ethereum","sepolia","avalanche","arbitrum","bsc","optimism","base","polygon"
+const EVM_CHAIN_NAME = "arbitrum";
+const FUNDER_EVM_MNEMONIC = "MNEMONIC HERE";
 
 async function depositFromEVMIntoSolanaAccount(): Promise<void> {
   const c3sdk = getC3SDK();
 
   // Login to the Solana account
   console.log("Authenticating account");
-  const accountSdk = await login(c3sdk, "solana");
+  const accountSdk = await login(c3sdk, Solana_MNEMONIC, "solana");
 
   // Get the funder for Arbitrum
-  const funderEVM = getFunder("arbitrum", FUNDER_ARBITRUM_MNEMONIC);
+  const funderEVM = getFunder(EVM_CHAIN_NAME, FUNDER_EVM_MNEMONIC);
 
   console.log(`Depositing ${AMOUNT} ${TOKEN} from EVM into Solana Account`);
   const deposit = await accountSdk.deposit({
     instrumentId: TOKEN,
     amount: AMOUNT,
-    chainName: "arbitrum",
+    chainName: EVM_CHAIN_NAME,
     funder: funderEVM,
   });
 

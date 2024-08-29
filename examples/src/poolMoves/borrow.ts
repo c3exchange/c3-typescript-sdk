@@ -2,6 +2,7 @@ import { OrderParams } from "@c3exchange/sdk";
 import { login, getC3SDK } from "../utils/utils";
 
 const CHAIN_NAME = "CHAIN NAME HERE";
+const MNEMONIC = "YOUR MNEMONIC HERE";
 
 const TOKEN = "ALGO";
 const WITHDRAW_AMOUNT = "10.00";
@@ -20,7 +21,7 @@ async function borrowAssets(): Promise<void> {
   const c3sdk = getC3SDK();
 
   console.log("Authenticating account");
-  const accountSdk = await login(c3sdk, CHAIN_NAME);
+  const accountSdk = await login(c3sdk, MNEMONIC, CHAIN_NAME);
 
   // Borrow within Withdraw
   console.log(
